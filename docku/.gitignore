@@ -1,0 +1,27 @@
+# /home/beni/projectku/Docku/.gitignore
+
+# Config with sensitive data
+config/database.php
+
+# Uploads
+uploads/foto/*
+!uploads/foto/.gitkeep
+!uploads/foto/.htaccess
+
+# Vendor
+# vendor/
+!vendor/fpdf/
+
+# SSH Keys
+id_rsa_cpanel
+id_rsa_cpanel.pub
+
+# Temporary files
+test.php
+reset_password.php
+*.log
+debug.php
+*.tar.gz
+*.sql
+cpanel_update/
+cpanel_full/

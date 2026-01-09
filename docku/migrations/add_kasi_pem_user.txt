@@ -1,0 +1,54 @@
+-- add_kasi_pem_user.sql
+-- Script untuk menambahkan user Kasi Pemerintahan (kasi_pem) ke Docku
+
+-- =====================================================
+-- STEP 1: Check if user already exists
+-- =====================================================
+SELECT 'Checking existing user...' as step;
+SELECT id, username, nama, jabatan FROM users WHERE username = 'kasi_pem';
+
+-- =====================================================
+-- STEP 2: Insert user kasi_pem
+-- =====================================================
+INSERT INTO users (
+    username, 
+    nama, 
+    password, 
+    role, 
+    jabatan, 
+    nip,
+    created_at
+) VALUES (
+    'kasi_pem',                                                          -- username
+    'BENI TRISNA WIJAYA',                                               -- nama (sesuaikan jika perlu)
+    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',   -- password = "password"
+    'pimpinan',                                                         -- role
+    'Kasi Pemerintahan',                                                -- jabatan
+    '198205192010011010',                                               -- nip
+    NOW()                                                               -- created_at
+);
+
+-- =====================================================
+-- STEP 3: Verify insertion
+-- =====================================================
+SELECT 'User created successfully!' as result;
+SELECT id, username, nama, jabatan, role FROM users WHERE username = 'kasi_pem';
+
+-- =====================================================
+-- STEP 4: Check syncable users
+-- =====================================================
+SELECT 'All users that will be synced:' as info;
+SELECT id, username, nama, jabatan, role 
+FROM users 
+WHERE role NOT IN ('admin', 'operator', 'staff', 'camat')
+AND username IS NOT NULL 
+AND username != ''
+ORDER BY id;
+
+-- =====================================================
+-- NOTES:
+-- =====================================================
+-- 1. Default password: "password"
+-- 2. Role: "pimpinan" (agar ikut sync ke API)
+-- 3. Setelah insert, jalankan sync manual via UI atau sync_manual.php
+-- 4. User harus ganti password setelah login pertama kali

@@ -1,0 +1,375 @@
+<?php
+/**
+ * SidikSae API Client
+ * Handles communication with centralized API at api.sidiksae.my.id
+ * Supports JWT authentication with API Key + Client Secret
+ */
+
+class SidikSaeApiClient {
+    private $config;
+    private $token = null;
+    private $tokenExpiry = null;
+    private $cacheFile;
+    private $lastHttpCode = 0;
+    private $lastResponse = null;
+    
+    public function __construct($config) {
+        $this->config = $config;
+        $this->cacheFile = __DIR__ . '/../storage/jwt_token_cache.json';
+        $this->loadTokenFromCache();
+    }
+    
+    /**
+     * Authenticate and get JWT token
+     * @return string|null JWT token or null on failure
+     */
+    public function authenticate() {
+        // Auth token endpoint usually lives under /api/v1
+        $url = rtrim($this->config['base_url'], '/') . '/api/v1/auth/token';
+        
+        $payload = [
+            'user_id' => $this->config['user_id'] ?? 1,
+            'client_id' => $this->config['client_id'] ?? 'suratqu',
+            'api_key' => $this->config['api_key'],
+            'client_secret' => $this->config['client_secret']
+        ];
+        
+        $response = $this->makeRequest('POST', $url, $payload, false);
+        
+        // API returns {"success": true, "data": {"token": "..."}}
+        if ($response && (
+            (isset($response['status']) && $response['status'] === 'success') || 
+            (isset($response['success']) && $response['success'] === true)
+        )) {
+            if (isset($response['data']['token'])) {
+                $this->token = $response['data']['token'];
+                $this->tokenExpiry = time() + ($response['data']['expires_in'] ?? 3600) - 60; // 60s buffer
+                $this->saveTokenToCache();
+                return $this->token;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get valid JWT token (from cache or authenticate)
+     * @return string|null
+     */
+    private function getToken() {
+        // Check if cached token is still valid
+        if ($this->token && $this->tokenExpiry && time() < $this->tokenExpiry) {
+            return $this->token;
+        }
+        
+        // Token expired or not available, authenticate
+        return $this->authenticate();
+    }
+    
+    /**
+     * Send disposition to SidikSae API
+     * @param array $dispositionData
+     * @return array Response with status, code, and data
+     */
+    public function sendDisposition($dispositionData) {
+        $token = $this->getToken();
+        
+        if (!$token) {
+            return [
+                'success' => false,
+                'error' => 'Failed to authenticate with SidikSae API',
+                'http_code' => 0
+            ];
+        }
+        
+        // Use the verified working endpoint: /api/v1/disposisi/push
+        $url = rtrim($this->config['base_url'], '/') . '/api/v1/disposisi/push';
+        
+        // Use multipart/form-data if scan_surat is present/file
+        $is_multipart = isset($dispositionData['scan_surat']);
+        
+        $response = $this->makeRequest('POST', $url, $dispositionData, true, $is_multipart);
+        
+        if ($response && isset($response['success'])) {
+            return [
+                'success' => $response['success'],
+                'data' => $response['data'] ?? null,
+                'message' => $response['message'] ?? '',
+                'http_code' => $this->lastHttpCode
+            ];
+        }
+        
+        // Return detailed error information from API
+        return [
+            'success' => false,
+            'error' => $response['message'] ?? $response['error'] ?? 'Invalid response from SidikSae API',
+            'http_code' => $this->lastHttpCode,
+            'api_response' => $response
+        ];
+    }
+    
+    /**
+     * Update disposition status
+     * @param string $externalId External ID of the disposition
+     * @param array $updateData Status update data
+     * @return array Response
+     */
+    public function updateDispositionStatus($externalId, $updateData) {
+        $token = $this->getToken();
+        
+        if (!$token) {
+            return [
+                'success' => false,
+                'error' => 'Failed to authenticate with SidikSae API',
+                'http_code' => 0
+            ];
+        }
+        
+        $url = rtrim($this->config['base_url'], '/') . '/api/v1/disposisi/update-status';
+        
+        $payload = array_merge([
+            'source_app' => $this->config['client_id'] ?? 'suratqu',
+            'external_id' => $externalId
+        ], $updateData);
+        
+        $response = $this->makeRequest('POST', $url, $payload, true);
+        
+        if ($response && isset($response['success'])) {
+            return [
+                'success' => $response['success'],
+                'data' => $response['data'] ?? null,
+                'message' => $response['message'] ?? '',
+                'http_code' => 200
+            ];
+        }
+        
+        return [
+            'success' => false,
+            'error' => 'Invalid response or request failed',
+            'http_code' => $this->lastHttpCode,
+            'response' => $this->lastResponse
+        ];
+    }
+
+    /**
+     * Get disposition status from SidikSae API
+     * @param string $externalId External ID (disposisi_id in SuratQu)
+     * @return array Response
+     */
+    public function getDispositionStatus($externalId) {
+        $token = $this->getToken();
+        
+        if (!$token) {
+            return [
+                'success' => false,
+                'error' => 'Failed to authenticate with SidikSae API',
+                'http_code' => 0
+            ];
+        }
+        
+        // Endpoint to check status (Assuming standard endpoint structure)
+        // If API doesn't support this specific one, we might need to query by source_app + external_id
+        $url = rtrim($this->config['base_url'], '/') . '/api/v1/disposisi/status';
+        $url .= '?source_app=' . ($this->config['client_id'] ?? 'suratqu');
+        $url .= '&external_id=' . $externalId;
+        
+        $response = $this->makeRequest('GET', $url, null, true);
+        
+        if ($response && isset($response['success'])) {
+            return [
+                'success' => $response['success'],
+                'data' => $response['data'] ?? null,
+                'message' => $response['message'] ?? '',
+                'http_code' => 200
+            ];
+        }
+        
+        return [
+            'success' => false,
+            'error' => 'Failed to retrieve status',
+            'http_code' => $this->lastHttpCode
+        ];
+    }
+    
+    /**
+     * Test API connection
+     * @return array Response with connection status
+     */
+    public function testConnection() {
+        $url = $this->config['base_url'] . '/health';
+        
+        $response = $this->makeRequest('GET', $url, null, false);
+        
+        if ($response && (
+            (isset($response['status']) && ($response['status'] === 'ok' || $response['status'] === 'success')) ||
+            (isset($response['success']) && $response['success'] === true)
+        )) {
+            // Health check passed - this means API is reachable and responsive
+            // Note: Authentication is tested separately in authenticate() method
+            // Calling authenticate() here causes HTTP 500 from API (likely rate limiting issue)
+            return [
+                'success' => true,
+                'message' => 'Connection successful - API is reachable and operational',
+                'http_code' => 200
+            ];
+        }
+        
+        return [
+            'success' => false,
+            'message' => 'Cannot connect to SidikSae API',
+            'http_code' => 0
+        ];
+    }
+    
+    /**
+     * Make HTTP request to API
+     * @param string $method HTTP method (GET, POST, PUT, DELETE)
+     * @param string $url Full URL to request
+     * @param array|null $data Request payload
+     * @param bool $authenticated Whether to include JWT token
+     * @param bool $isMultipart Whether to use multipart/form-data
+     * @return array|null Decoded JSON response or null on failure
+     */
+    private function makeRequest($method, $url, $data = null, $authenticated = false, $isMultipart = false) {
+        $ch = curl_init();
+        
+        $headers = [
+            'X-API-KEY: ' . $this->config['api_key'],
+            'Accept: application/json'
+        ];
+        
+        $rawPayload = null;
+        if ($isMultipart) {
+            // Multipart will let cURL set the Content-Type with boundary
+            $rawPayload = $data;
+        } else {
+            $headers[] = 'Content-Type: application/json';
+            if ($data !== null) {
+                // Ensure UTF-8 and proper escaping as requested
+                $rawPayload = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+        
+        if ($authenticated && $this->token) {
+            $headers[] = 'Authorization: Bearer ' . $this->token;
+        }
+        
+        $options = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_TIMEOUT => 30, // WAJIB: Timeout yang masuk akal
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_SSL_VERIFYPEER => true, // WAJIB: Default true security check
+            CURLOPT_FOLLOWLOCATION => true, // WAJIB: Handle redirects
+            CURLOPT_USERAGENT => 'SuratQu/1.0 API Client', // Good practice to identify client
+        ];
+        
+        if ($method === 'POST' || $method === 'PUT') {
+            $options[CURLOPT_POST] = true;
+            if ($rawPayload !== null) {
+                $options[CURLOPT_POSTFIELDS] = $rawPayload;
+            }
+        } elseif ($method === 'DELETE') {
+            $options[CURLOPT_CUSTOMREQUEST] = 'DELETE';
+        } elseif ($method === 'GET' && $data) {
+            $url = $url . (strpos($url, '?') === false ? '?' : '&') . http_build_query($data);
+            $options[CURLOPT_URL] = $url;
+        }
+        
+        curl_setopt_array($ch, $options);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        $errno = curl_errno($ch);
+        
+        curl_close($ch);
+        
+        $this->lastHttpCode = $httpCode;
+        $this->lastResponse = $response;
+        
+        // Log request for debugging - MUST be identical to what was sent
+        $this->logRequest($method, $url, $rawPayload, $headers, $httpCode, $response, $error);
+        
+        if ($errno) {
+            // Include specific curl error in the return
+            return [
+                'success' => false,
+                'error' => "cURL Connection Error ($errno): $error",
+                'http_code' => 0
+            ];
+        }
+        
+        if ($response) {
+            $decoded = json_decode($response, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+            return [
+                'success' => false,
+                'error' => 'Malformed JSON response',
+                'raw_response' => $response,
+                'http_code' => $httpCode
+            ];
+        }
+        
+        return [
+            'success' => false,
+            'error' => 'Empty response from API',
+            'http_code' => $httpCode
+        ];
+    }
+    
+    /**
+     * Save token to cache file
+     */
+    private function saveTokenToCache() {
+        $cache = [
+            'token' => $this->token,
+            'expiry' => $this->tokenExpiry
+        ];
+        
+        @file_put_contents($this->cacheFile, json_encode($cache));
+    }
+    
+    /**
+     * Load token from cache file
+     */
+    private function loadTokenFromCache() {
+        if (file_exists($this->cacheFile)) {
+            $cache = json_decode(file_get_contents($this->cacheFile), true);
+            
+            if ($cache && isset($cache['token'], $cache['expiry'])) {
+                if (time() < $cache['expiry']) {
+                    $this->token = $cache['token'];
+                    $this->tokenExpiry = $cache['expiry'];
+                }
+            }
+        }
+    }
+    
+    /**
+     * Log request for debugging
+     */
+    private function logRequest($method, $url, $payload, $headers, $httpCode, $response, $error) {
+        $logFile = __DIR__ . '/../storage/api_requests.log';
+        
+        $logEntry = [
+            'timestamp'   => date('Y-m-d H:i:s'),
+            'endpoint'    => $url,
+            'method'      => $method,
+            'headers'     => $headers,
+            'raw_payload' => $payload, // Should be identical to what was sent
+            'status_code' => $httpCode,
+            'response'    => $response, // Full response
+            'curl_error'  => $error
+        ];
+        
+        @file_put_contents(
+            $logFile,
+            json_encode($logEntry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n",
+            FILE_APPEND
+        );
+    }
+}

@@ -1,0 +1,17 @@
+# Development and Local Tools
+start_local.sh
+stop_local.sh
+apply_local_config.php
+restore_prod_config.php
+*.log
+
+# Deployment Packages
+*.tar.gz
+
+# Extra Documentation (keeping manifest for reference, but can be ignored if preferred)
+# DEPLOYMENT_MANIFEST.md
+# DEPLOY_*_README.md
+# UUID_*_GUIDE.md
+# MISSING_MIGRATIONS_README.md
+# MIGRATE_SURAT_TABLE.md
+# DEBUG_MULTIPART_ISSUE.md

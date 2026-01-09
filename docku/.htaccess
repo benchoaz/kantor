@@ -1,0 +1,15 @@
+# /home/beni/projectku/Docku/.htaccess
+
+# Disable directory listing
+Options -Indexes
+
+# Protect sensitive directories
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "^(config|includes|vendor)">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

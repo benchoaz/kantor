@@ -1,0 +1,368 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+    --primary-color: #87A380;
+    /* Sage Green */
+    --accent-color: #6B8E61;
+    --success-color: #2ECC71;
+    --danger-color: #E74C3C;
+    --warning-color: #F1C40F;
+    --bg-color: #FFFFFF;
+    --card-bg: #FFFFFF;
+    --text-main: #2D3436;
+    --text-muted: #636E72;
+    --border-color: #EDF2F7;
+    --bottom-nav-height: 76px;
+    --header-height: 64px;
+}
+
+/* Base Styles */
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    padding-bottom: calc(var(--bottom-nav-height) + 24px);
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    letter-spacing: -0.015em;
+}
+
+@media (max-width: 991px) {
+    body {
+        padding-top: var(--header-height);
+    }
+}
+
+/* Force Sage Colors on Bootstrap */
+.bg-primary {
+    background-color: var(--primary-color) !important;
+    --bs-bg-opacity: 1;
+    background-color: rgba(135, 163, 128, var(--bs-bg-opacity)) !important;
+}
+
+.text-primary {
+    color: var(--primary-color) !important;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white !important;
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+/* Modern Header */
+.header-elegant {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 1060;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+}
+
+.header-elegant .brand {
+    font-weight: 800;
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    letter-spacing: -1.2px;
+}
+
+.header-greeting {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-right: 12px;
+}
+
+/* Card Styling */
+.card-modern {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+    margin-bottom: 24px;
+    transition: transform 0.3s;
+}
+
+/* Hero Section */
+.hero-gradient {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+    border-radius: 28px;
+    padding: 40px 24px;
+    text-align: center;
+    color: white;
+}
+
+/* Shortcut Boxes */
+.shortcut-dashed {
+    border: 2px dashed rgba(135, 163, 128, 0.3);
+    background: rgba(135, 163, 128, 0.05);
+    border-radius: 24px;
+    padding: 32px 24px;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.shortcut-dashed:active {
+    transform: scale(0.97);
+    background: rgba(135, 163, 128, 0.08);
+}
+
+/* Dash Shortcut Specific - iPhone Capture Style */
+.shortcut-iphone {
+    background: #1A1F1A;
+    /* Obsidian Sage - Deep Dark */
+    border: 1px solid rgba(135, 163, 128, 0.2);
+    border-radius: 32px;
+    padding: 36px 24px;
+    text-align: center;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.shortcut-iphone:active {
+    transform: scale(0.96);
+    background: #141814;
+}
+
+.shutter-btn {
+    width: 90px;
+    height: 90px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border: 4px solid #1A1F1A;
+    box-shadow: 0 0 0 4px #FFFFFF;
+    /* iOS Shutter Ring Effect */
+    transition: all 0.3s;
+}
+
+.shutter-btn i {
+    font-size: 2.2rem;
+    color: #1A1F1A !important;
+}
+
+.shortcut-iphone .title-tech {
+    color: #FFFFFF;
+    font-weight: 800;
+    letter-spacing: -1px;
+    font-size: 1.6rem;
+    margin-bottom: 4px;
+}
+
+.shortcut-iphone .desc-tech {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9rem;
+}
+
+/* Elegant Buttons */
+.btn-elegant {
+    padding: 0.8rem 2rem;
+    font-weight: 700;
+    border-radius: 100px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+}
+
+.btn-white-elegant {
+    background: white;
+    color: var(--primary-color);
+}
+
+/* Bottom Navigation */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--bottom-nav-height);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1050;
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex: 1;
+    height: 100%;
+}
+
+.bottom-nav-item i {
+    font-size: 1.5rem;
+    margin-bottom: 2px;
+}
+
+.bottom-nav-item.active {
+    color: var(--primary-color);
+}
+
+.bottom-nav-center {
+    position: relative;
+    top: -20px;
+}
+
+.btn-fab-elegant {
+    width: 70px;
+    height: 70px;
+    border-radius: 22px;
+    background: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 25px rgba(135, 163, 128, 0.4);
+    border: 5px solid white;
+    font-size: 2rem;
+}
+
+/* Alert Styling - Elegant Sage Alert */
+.alert-elegant {
+    background: #FFF5F5;
+    border: 1px solid #FFE3E3;
+    color: #D63031;
+    border-radius: 16px;
+    padding: 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Animations */
+.animate-up {
+    animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    opacity: 0;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.table-modern tbody,
+.table-modern tr,
+.table-modern td {
+    display: block;
+    width: 100%;
+
+    .table-modern tr {
+        margin-bottom: 1.25rem;
+        background: white;
+        border-radius: 16px;
+        padding: 1.25rem;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    .table-modern td {
+        text-align: left;
+        padding: 0.75rem 0;
+        position: relative;
+        border: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .table-modern td:last-child {
+        border-bottom: none;
+    }
+
+    .table-modern td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+        color: var(--text-muted);
+        margin-bottom: 0.25rem;
+    }
+
+    /* Hide labels for first cell (already has visual content) */
+    .table-modern td:first-child::before {
+        display: none;
+    }
+}
+
+/* Animations */
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.animate-up {
+    animation: slideUp 0.4s ease-out forwards;
+}
+
+/* Mobile Typography Enhancements */
+@media (max-width: 768px) {
+    body {
+        padding-bottom: calc(var(--bottom-nav-height) + 60px) !important;
+    }
+
+    .table-modern .fw-bold {
+        font-size: 0.95rem;
+        line-height: 1.4;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .table-modern .small {
+        font-size: 0.8rem;
+        line-height: 1.3;
+    }
+
+    .table-modern .badge {
+        display: inline-block;
+        margin-top: 0.25rem;
+    }
+}

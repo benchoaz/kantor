@@ -1,0 +1,22 @@
+<?php
+/**
+ * Database Configuration for SuratQu (Example)
+ */
+
+define('DB_HOST', '127.0.0.1');
+define('DB_NAME', 'suratqu_db');
+define('DB_USER', 'your_username');
+define('DB_PASS', 'your_password');
+
+/* ... PDO init logic ... */
+try {
+    $options = [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ];
+    $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4";
+    $db = new PDO($dsn, DB_USER, DB_PASS, $options);
+} catch (PDOException $e) {
+    die("Koneksi Database Gagal.");
+}

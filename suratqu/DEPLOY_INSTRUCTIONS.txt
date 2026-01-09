@@ -1,0 +1,42 @@
+DEPLOYMENT INSTRUCTIONS - SURATQU V3 (STRICT WORKFLOW)
+======================================================
+Tanggal: 2026-01-03
+
+Update ini mencakup:
+1.  Perubahan alur Surat Masuk (Draft -> Agenda -> Auto Disposisi).
+2.  Penambahan kolom dan status baru di database (`draft`, `teragenda`, `disposisi_dibuat`).
+3.  Perbaikan integrasi API SidikSae (Kirim File Attachment).
+4.  Penghapusan tombol Disposisi Manual untuk Operator.
+
+LANGKAH DEPLOYMENT:
+-------------------
+
+1.  BACKUP
+    - Backup file website lama Anda (zip folder public_html).
+    - Backup database Anda (Export SQL).
+
+2.  UPLOAD DAN EXTRACT
+    - Upload file `SuratQu_Deploy_V3.zip` ke public_html atau folder instalasi.
+    - Extract file tersebut dan TIMPA (Overwrite) file yang ada.
+    - **PENTING**: File `config/database.php` TIDAK disertakan agar tidak menimpa koneksi database live Anda.
+    - **PENTING**: File `config/integration.php` JUGA TIDAK disertakan agar konfigurasi API Key live aman.
+
+3.  UPDATE DATABASE (PENTING!)
+    - Setelah extract, buka browser dan akses alamat berikut:
+      http://[DOMAIN_ANDA]/SuratQu/update_schema_v3.php
+    
+    - Jika muncul pesan "SUCCESS" atau "DONE", berarti database berhasil diperbarui.
+    - Status surat lama dengan status 'baru' mungkin akan diubah menjadi 'draft' (sesuai script).
+    - Hapus file `update_schema_v3.php` setelah selesai demi keamanan.
+
+4.  VERIFIKASI
+    - Login sebagai Operator.
+    - Coba input surat masuk baru. Pastikan ada tombol "Simpan Draft" dan "Agendakan".
+    - Coba klik "Agendakan", pastikan status berubah jadi "Disposisi Dibuat" dan disposisi ke Camat otomatis terbentuk.
+    - Cek menu Disposisi, pastikan operator tidak bisa akses tombol tambah manual.
+
+CATATAN TAMBAHAN:
+-----------------
+Jika terjadi error "Column not found: unknown column 'status'...", pastikan Langkah 3 sudah dijalankan.
+
+Terima kasih.

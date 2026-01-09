@@ -1,0 +1,293 @@
+/**
+ * Design System - Camat Leadership Panel
+ * Sistem warna Sage Green yang tenang dan profesional
+ */
+
+/* ==========================================
+   IMPORT GOOGLE FONTS
+   ========================================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+
+/* ==========================================
+   CSS VARIABLES - MINIMALIST ELITE PALETTE
+   ========================================== */
+:root {
+    /* Primary Colors - Tenang & Resmi */
+    --sage-green: #7A9B8E;
+    --sage-green-dark: #58756A;
+    --sage-green-light: #9BB3AA;
+    --sage-green-pale: #F2F7F5;
+
+    /* Accents - Minimal */
+    --accent-gold: #C5A065;
+
+    /* Neutral Palette - Dominasi Putih */
+    --white: #FFFFFF;
+    --bg-main: #FFFFFF;
+    --bg-secondary: #F8FAFA;
+
+    --text-main: #1F2926;
+    --text-secondary: #6B7C76;
+    --text-tertiary: #A5B3AF;
+
+    --border-light: #E8EEEC;
+
+    /* Status Colors (Soft & Clear) */
+    --color-critical: #FF3B30;
+    /* iOS Red */
+    --color-warning: #FF9500;
+    /* iOS Orange */
+    --color-success: #34C759;
+    /* iOS Green */
+    --color-info: #007AFF;
+    /* iOS Blue */
+
+    /* Spacing - iOS Standard */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    --space-2xl: 48px;
+
+    /* Shadows - iOS Diffuse */
+    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+    --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+    /* Typography - San Francisco Compatible */
+    --font-primary: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    --font-secondary: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --text-xs: 11px;
+    --text-sm: 13px;
+    --text-base: 15px;
+    /* iOS Body */
+    --text-lg: 17px;
+    /* iOS Headline */
+    --text-xl: 20px;
+    /* iOS Title 3 */
+    --text-2xl: 22px;
+    /* iOS Title 2 */
+    --text-3xl: 34px;
+    /* iOS Title 1 */
+
+    /* Radius - iOS Squircle-ish */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 14px;
+    --radius-xl: 24px;
+    --radius-pill: 500px;
+    --radius-full: 100%;
+
+    /* iOS Materials */
+    --ios-blur: blur(20px);
+    --ios-bg-translucent: rgba(255, 255, 255, 0.85);
+
+    /* Transitions */
+    --transition-fast: 0.2s ease;
+    --transition-base: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Z-Index */
+    --z-nav: 1000;
+    --z-modal: 2000;
+    --z-toast: 3000;
+}
+
+/* ==========================================
+   RESET & BASE STYLES
+   ========================================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+body {
+    font-family: var(--font-primary);
+    background-color: #F2F2F7;
+    /* iOS Grouped Background Color */
+    color: var(--text-main);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    font-size: 15px;
+}
+
+/* ==========================================
+   TYPOGRAPHY
+   ========================================== */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: var(--space-md);
+    color: var(--text-dark);
+}
+
+h1 {
+    font-size: var(--font-3xl);
+}
+
+h2 {
+    font-size: var(--font-2xl);
+}
+
+h3 {
+    font-size: var(--font-xl);
+}
+
+h4 {
+    font-size: var(--font-lg);
+}
+
+h5 {
+    font-size: var(--font-base);
+}
+
+h6 {
+    font-size: var(--font-sm);
+}
+
+p {
+    margin-bottom: var(--space-md);
+}
+
+a {
+    color: var(--sage-green);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: var(--sage-green-dark);
+}
+
+/* ==========================================
+   LAYOUT UTILITIES
+   ========================================== */
+.container {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: var(--space-md);
+}
+
+@media (min-width: 768px) {
+    .container {
+        max-width: 768px;
+        padding: var(--space-lg);
+    }
+}
+
+/* Content area yang mempertimbangkan bottom nav */
+.content-wrapper {
+    min-height: calc(100vh - 70px);
+    padding-bottom: 80px;
+    /* Space untuk bottom nav */
+}
+
+/* ==========================================
+   UTILITY CLASSES
+   ========================================== */
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-left {
+    text-align: left;
+}
+
+.mt-0 {
+    margin-top: 0;
+}
+
+.mt-1 {
+    margin-top: var(--space-sm);
+}
+
+.mt-2 {
+    margin-top: var(--space-md);
+}
+
+.mt-3 {
+    margin-top: var(--space-lg);
+}
+
+.mt-4 {
+    margin-top: var(--space-xl);
+}
+
+.mb-0 {
+    margin-bottom: 0;
+}
+
+.mb-1 {
+    margin-bottom: var(--space-sm);
+}
+
+.mb-2 {
+    margin-bottom: var(--space-md);
+}
+
+.mb-3 {
+    margin-bottom: var(--space-lg);
+}
+
+.mb-4 {
+    margin-bottom: var(--space-xl);
+}
+
+.hidden {
+    display: none;
+}
+
+.block {
+    display: block;
+}
+
+.flex {
+    display: flex;
+}
+
+.inline-flex {
+    display: inline-flex;
+}
+
+.gap-1 {
+    gap: var(--space-sm);
+}
+
+.gap-2 {
+    gap: var(--space-md);
+}
+
+.gap-3 {
+    gap: var(--space-lg);
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.w-full {
+    width: 100%;
+}

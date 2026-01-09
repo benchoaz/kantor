@@ -1,0 +1,10 @@
+config/database.php
+uploads/*
+!uploads/.gitkeep
+storage/*
+!storage/.gitkeep
+.DS_Store
+*.log
+*.tar.gz
+*debug*.php
+test_endpoints.php

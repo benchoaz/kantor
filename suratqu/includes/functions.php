@@ -1,0 +1,276 @@
+<?php
+/**
+ * Global Helper Functions for SuratQu
+ */
+
+/**
+ * Send Notification to Telegram
+ */
+function sendTelegram($chat_id, $message) {
+    global $db;
+    
+    // Get Bot Token from Constants or DB (assuming constant for now)
+    $token = "YOUR_BOT_TOKEN_HERE"; // Should be moved to config/constants.php
+    $url = "https://api.telegram.org/bot$token/sendMessage";
+    
+    $data = [
+        'chat_id' => $chat_id,
+        'text' => $message,
+        'parse_mode' => 'HTML'
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    // Filter status for logging
+    $status = ($response === false) ? 'failed' : 'sent';
+    
+    // Log Notification
+    $stmt = $db->prepare("INSERT INTO log_notifikasi (id_user, pesan, channel, status) VALUES (?, ?, 'telegram', ?)");
+    $stmt->execute([$_SESSION['id_user'] ?? null, $message, $status]);
+
+    return $response;
+}
+
+/**
+ * Log User Activity (Audit Trail)
+ */
+function logActivity($aksi, $tabel = null, $id_data = null) {
+    global $db;
+    $ip = $_SERVER['REMOTE_ADDR'];
+    $user_id = $_SESSION['id_user'] ?? null;
+
+    $stmt = $db->prepare("INSERT INTO log_aktivitas (id_user, aksi, tabel_terkait, id_data_terkait, ip_address) VALUES (?, ?, ?, ?, ?)");
+    return $stmt->execute([$user_id, $aksi, $tabel, $id_data, $ip]);
+}
+
+/**
+ * Check if User is Logged In
+ */
+function is_logged_in() {
+    return isset($_SESSION['id_user']);
+}
+
+/**
+ * Require Authentication
+ */
+function require_auth() {
+    if (!is_logged_in()) {
+        header("Location: login.php");
+        exit;
+    }
+}
+
+/**
+ * Format Indonesian Date
+ * Output: "31 Desember 2025"
+ */
+function format_tgl_indo($tgl) {
+    if (!$tgl || $tgl == '0000-00-00') return '-';
+    $bulan = [
+        1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    $split = explode('-', $tgl);
+    return $split[2] . ' ' . $bulan[(int)$split[1]] . ' ' . $split[0];
+}
+
+/**
+ * Format Indonesian Time with WIB
+ * Output: "09:30 WIB"
+ */
+function format_jam_wib($datetime) {
+    if (!$datetime || $datetime == '0000-00-00 00:00:00') return '-';
+    try {
+        $dt = new DateTime($datetime);
+        return $dt->format('H:i') . ' WIB';
+    } catch (Exception $e) {
+        return '-';
+    }
+}
+
+/**
+ * Format Indonesian Date & Time with WIB
+ * Output: "31 Desember 2025 09:30 WIB"
+ */
+function format_tgl_jam_wib($datetime) {
+    if (!$datetime || $datetime == '0000-00-00 00:00:00') return '-';
+    
+    $bulan = [
+        1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    
+    try {
+        $dt = new DateTime($datetime);
+        $tgl = $dt->format('j');
+        $bln = $bulan[(int)$dt->format('n')];
+        $thn = $dt->format('Y');
+        $jam = $dt->format('H:i');
+        
+        return "$tgl $bln $thn $jam WIB";
+    } catch (Exception $e) {
+        return '-';
+    }
+}
+
+
+/**
+ * OCR.space API Helper
+ * Mengirim file ke cloud OCR dan mengembalikan teks hasil ekstraksi
+ */
+function performOCR($filePath) {
+    $apiKey = 'K88670224688957'; // OCR.space Free API Key provided by user
+    
+    if (!file_exists($filePath)) return "File tidak ditemukan.";
+
+    $postData = [
+        'apikey' => $apiKey,
+        'language' => 'auto', // Menggunakan Auto-Detect (Sangat direkomendasikan untuk Engine 2)
+        'isOverlayRequired' => 'false',
+        'file' => new CURLFile($filePath),
+        'scale' => 'true',
+        'isTable' => 'false',
+        'OCREngine' => '2' // Menggunakan Engine 2 (Lebih canggih & mendukung auto-detection)
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, 'https://api.ocr.space/parse/image');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    if ($error) return "CURL Error: " . $error;
+
+    $result = json_decode($response, true);
+    if (isset($result['ParsedResults'][0]['ParsedText'])) {
+        return $result['ParsedResults'][0]['ParsedText'];
+    }
+
+    return "Gagal ekstraksi teks: " . ($result['ErrorMessage'][0] ?? 'Unknown error');
+}
+
+/**
+ * Redirect with Alert
+ */
+function redirect($url, $msg = null, $type = 'success') {
+    if ($msg) {
+        $_SESSION['alert'] = ['msg' => $msg, 'type' => $type];
+    }
+    header("Location: $url");
+    exit;
+}
+
+/**
+ * Time Since Helper (Format: 2 mins ago)
+ */
+function time_since($timestamp) {
+    if (!$timestamp) return "-";
+    $time = strtotime($timestamp);
+    $diff = time() - $time;
+    
+    if ($diff < 60) return "Baru saja";
+    $units = [
+        31536000 => 'tahun',
+        2592000 => 'bulan',
+        604800 => 'minggu',
+        86400 => 'hari',
+        3600 => 'jam',
+        60 => 'menit'
+    ];
+    
+    foreach ($units as $unit => $text) {
+        if ($diff < $unit) continue;
+        $count = floor($diff / $unit);
+        return "$count $text yang lalu";
+    }
+    return date('d/m/Y', $time);
+}
+
+/**
+ * Validate uploaded file for API submission
+ * @param string $file_path Relative path to file from project root
+ * @return array ['valid' => bool, 'error' => string|null, 'details' => array]
+ */
+function validateScanFile($file_path) {
+    $errors = [];
+    $details = [];
+    
+    if (empty($file_path)) {
+        return [
+            'valid' => false,
+            'error' => 'File path kosong',
+            'details' => $details
+        ];
+    }
+    
+    $real_path = realpath(__DIR__ . '/../' . $file_path);
+    $details['original_path'] = $file_path;
+    $details['resolved_path'] = $real_path ?: null;
+    
+    // Existence check
+    if (!$real_path || !file_exists($real_path)) {
+        $errors[] = 'File tidak ditemukan di server';
+        return [
+            'valid' => false,
+            'error' => implode(', ', $errors),
+            'details' => $details
+        ];
+    }
+    
+    // Size check
+    $file_size = filesize($real_path);
+    $details['size_bytes'] = $file_size;
+    $details['size_mb'] = round($file_size / 1024 / 1024, 2);
+    
+    if ($file_size === false) {
+        $errors[] = 'File corrupted atau tidak dapat dibaca';
+    } elseif ($file_size > 10 * 1024 * 1024) {
+        $errors[] = "File terlalu besar ({$details['size_mb']} MB, maksimal 10 MB)";
+    } elseif ($file_size === 0) {
+        $errors[] = 'File kosong (0 bytes)';
+    }
+    
+    // Type check
+    $mime = mime_content_type($real_path);
+    $details['mime_type'] = $mime;
+    $extension = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
+    $details['extension'] = $extension;
+    
+    $allowed_types = ['application/pdf'];
+    $allowed_extensions = ['pdf'];
+    
+    if (!in_array($mime, $allowed_types)) {
+        $errors[] = "Tipe file tidak didukung ($mime). Gunakan PDF Asli";
+    }
+    
+    // Extension check: Only fail if extension is provided AND not in allowed list.
+    // This allows files renamed with underscores (e.g. _pdf) as long as MIME is valid.
+    if (!empty($extension) && !in_array($extension, $allowed_extensions)) {
+        $errors[] = "Ekstensi file tidak didukung (.$extension)";
+    }
+    
+    // Permission check
+    if (!is_readable($real_path)) {
+        $errors[] = 'File tidak memiliki permission read yang benar';
+    }
+    
+    $details['errors'] = $errors;
+    
+    return [
+        'valid' => empty($errors),
+        'error' => empty($errors) ? null : implode(', ', $errors),
+        'details' => $details
+    ];
+}

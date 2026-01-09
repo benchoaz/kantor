@@ -1,0 +1,11 @@
+# Disable execution of scripts in this directory
+<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Only allow images
+<FilesMatch "\.(?i:jpe?g|gif|png|webp)$">
+    Order deny,allow
+    Allow from all
+</FilesMatch>

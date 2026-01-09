@@ -1,0 +1,12 @@
+# Disable directory browsing
+Options -Indexes
+
+# Protect sensitive directories
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect config and includes folders
+RewriteEngine On
+RewriteRule ^(config|includes|storage|database|templates|modules)/.*$ - [F,L]

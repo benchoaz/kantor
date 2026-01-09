@@ -1,0 +1,21 @@
+# PROMPT UNTUK PERBAIKAN API PUSAT
+
+Tolong perbaiki error HTTP 500 (Internal Server Error) pada endpoint `/api/v1/pimpinan/dashboard`.
+
+**Analisis Masalah:**
+1.  Klien (Aplikasi Camat) berhasil login dan mendapatkan token Bearer yang valid.
+2.  Endpoint lain seperti `/pimpinan/surat-masuk` berjalan normal (HTTP 200).
+3.  Namun, request ke `/pimpinan/dashboard` selalu mengembalikan status **500** dengan pesan generic "Gagal mengambil data dashboard" (atau default error message).
+
+**Kemungkinan Penyebab:**
+- Terjadi *Fatal Error* atau *Exception* yang tidak tertangkap (uncaught exception) di dalam method `dashboard` pada `PimpinanController`.
+- Kemungkinan query database error (misal: kolom kurang, tabel tidak ditemukan, atau syntax SQL salah).
+- Variabel `$user` atau `id` pimpinan mungkin null atau tidak terbaca dengan benar dari token.
+- Helper function yang hilang atau salah nama.
+
+**Tugas:**
+1.  Buka file controller yang menangani route dashboard pimpinan (kemungkinan `app/Controllers/PimpinanController.php`).
+2.  Cek method `dashboard()`.
+3.  Pastikan semua query database di dalamnya valid dan menggunakan `try-catch` block yang benar.
+4.  Pastikan response mengembalikan JSON yang sukses jika data kosong (jangan error).
+5.  Perbaiki kode tersebut agar endpoint kembali normal (HTTP 200).
