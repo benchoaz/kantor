@@ -23,18 +23,20 @@ class AdminUserController {
         }
     }
 
-    public function login($username, $password) {
-        $stmt = $this->conn->prepare("SELECT * FROM users WHERE username = :username AND role = 'admin' AND is_active = 1 LIMIT 1");
-        $stmt->execute([':username' => $username]);
-        $user = $stmt->fetch();
-
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['admin_logged_in'] = true;
-            $_SESSION['admin_id'] = $user['id'];
-            $_SESSION['admin_name'] = $user['nama'];
-            return true;
-        }
-        return false;
+    public function login() {
+        // PHASE 1 SAFE MIGRATION: Authentication delegated to Identity Module
+        // This endpoint is DEPRECATED and should redirect to Identity Module
+        
+        header('Content-Type: application/json');
+        http_response_code(410); // Gone
+        
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Local authentication disabled. Please use Identity Module (id.sidiksae.my.id) for login.',
+            'redirect_url' => 'https://id.sidiksae.my.id/v1/auth/login',
+            'migration_note' => 'This endpoint is deprecated as part of Phase 1 Safe Migration'
+        ]);
+        exit;
     }
 
     public function getAllUsers() {

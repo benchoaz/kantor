@@ -81,10 +81,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('disposisi.php' . ($suratId ? '?surat_id=' . $suratId : ''));
     }
     
+    
     $tujuan = $_POST['tujuan'] ?? [];
     $sifat_disposisi = $_POST['sifat_disposisi'] ?? '';
     $catatan = sanitize($_POST['catatan'] ?? '');
     $deadline = $_POST['deadline'] ?? '';
+    
+    // Map to new format
+    $sifat = strtoupper($sifat_disposisi); // SEGERA, PENTING, BIASA, RAHASIA
+    $penerima = is_array($tujuan) ? array_map(function($uid){ 
+        return ['user_id' => $uid, 'tipe' => 'TINDAK_LANJUT']; 
+    }, (array)$tujuan) : [['user_id' => $tujuan, 'tipe' => 'TINDAK_LANJUT']];
+    $instruksi = [['isi' => $catatan]]; // Wrap catatan as instruksi
+    
+    // CRITICAL FIX: Dynamic toRole based on first recipient
+    $toRole = 'sekcam'; // Default fallback
+    if (!empty($penerima[0]['user_id'])) {
+        // Get role from first recipient
+        $firstRecipient = $penerima[0]['user_id'];
+        $recipientData = $api->get('/users/' . $firstRecipient);
+        if ($recipientData['success'] && isset($recipientData['data']['role'])) {
+            $toRole = $recipientData['data']['role'];
+        }
+    }
+    
+    // CRITICAL FIX: File validation (governance requirement)
+    if (empty($surat['scan_surat'])) {
+        $errors[] = 'Scan surat wajib tersedia sebelum disposisi (cacat administrasi)';
+    }
     
     // Validasi
     $errors = [];
@@ -102,30 +126,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     if (empty($errors)) {
-        // Kirim ke API
+        // CRITICAL FIX: Correct session structure (Phase B flat session)
+        // Kirim ke API (ROLE-BASED PAYLOAD)
         $data = [
-            'surat_id' => $suratId, // To be mapped to uuid_surat in Client/API
-            'uuid_surat' => $surat['uuid'] ?? $suratId, // Robustness
-            'sender_id' => $_SESSION['user_id'] ?? null, // MANIFESTO RULE: Sender Identity
-            'target_user_id' => $tujuan, 
-            'penerima' => is_array($tujuan) ? array_map(function($uid){ return ['user_id' => $uid, 'tipe' => 'TINDAK_LANJUT']; }, (array)$tujuan) : [['user_id' => $tujuan, 'tipe' => 'TINDAK_LANJUT']], // Map to new API format
-            'tujuan' => $tujuan, // Legacy compat
-            'sifat' => $sifat_disposisi, // Map to API 'sifat'
-            'sifat_disposisi' => $sifat_disposisi,
+            'uuid_surat' => $surat['uuid'] ?? $suratId,
+            'from' => [
+                'uuid_user' => $_SESSION['uuid_user'] ?? null,  // FIXED: Phase B session
+                'user_id'   => $_SESSION['user_id'],            // Legacy for audit
+                'role'      => $_SESSION['role'] ?? 'pimpinan', // FIXED: Flat session
+                'source'    => 'camat'
+            ],
+            'to' => [
+                'role' => $toRole  // Now dynamic from recipient
+            ],
+            'penerima' => $penerima,
+            'instruksi' => $instruksi,
+            'sifat' => $sifat,
             'catatan' => $catatan,
             'deadline' => $deadline
         ];
-        
-        $response = $api->post(ENDPOINT_DISPOSISI_CREATE, $data);
-        
+
+        $response = $api->post('/pimpinan/disposisi', $data);
+
         if ($response['success']) {
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode([
-                    'success' => true, 
-                    'message' => 'Disposisi berhasil dikirim',
-                    'redirect_url' => $suratId ? 'modules/surat/detail.php?surat_id=' . $suratId : 'monitoring.php'
-                ]);
+                // CRITICAL FIX: Add redirect to prevent double submission
+            echo json_encode([
+                'success' => true,
+                'message' => 'Disposisi berhasil dikirim',
+                'data' => $response['data'] ?? [],
+                'redirect' => $suratId 
+                    ? 'modules/surat/detail.php?surat_id=' . urlencode($suratId)
+                    : 'monitoring.php'
+            ]);
                 exit;
             }
             setFlashMessage('success', 'Disposisi berhasil dikirim');

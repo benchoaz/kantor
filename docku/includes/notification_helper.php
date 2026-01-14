@@ -8,7 +8,8 @@
 function getUnreadDispositionCount($pdo, $userId) {
     if (!$userId) return 0;
     
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM disposisi_penerima WHERE user_id = ? AND status_followup IN ('pending', 'in_progress')");
+    // Updated to use 'status' column which is populated by sync_disposisi_final.php
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM disposisi_penerima WHERE user_id = ? AND status = 'baru'");
     $stmt->execute([$userId]);
     return intval($stmt->fetchColumn());
 }
@@ -17,10 +18,12 @@ function getUnreadDispositionCount($pdo, $userId) {
  * Get latest unread disposition for popup
  */
 function getLatestUnreadDisposition($pdo, $userId) {
+    if (!$userId) return null;
     $stmt = $pdo->prepare("
-        SELECT d.id, d.perihal, d.instruksi, dp.id as penerima_id 
+        SELECT d.id, s.perihal, d.instruksi, dp.id as penerima_id 
         FROM disposisi d 
         JOIN disposisi_penerima dp ON d.id = dp.disposisi_id 
+        LEFT JOIN surat s ON d.uuid_surat = s.uuid
         WHERE dp.user_id = ? AND dp.status = 'baru' 
         ORDER BY d.created_at DESC LIMIT 1
     ");

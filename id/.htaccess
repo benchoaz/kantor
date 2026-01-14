@@ -1,4 +1,35 @@
+# Security Hardening
+<IfModule mod_headers.c>
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Frame-Options "DENY"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+</IfModule>
+
+# Force HTTPS
+# Force HTTPS
 RewriteEngine On
+Options +FollowSymLinks
+RewriteBase /
+
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Prevent Directory Listing
+Options -Indexes
+
+# Block sensitive directories
+RewriteRule ^(storage|config|models|core|scripts|vendor)($|/) - [F,L]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/admin/ [NC]
+RewriteCond %{REQUEST_URI} !^/reseed_admin_only\.php$ [NC]
+RewriteCond %{REQUEST_URI} !^/fix_app_secret\.php$ [NC]
+RewriteCond %{REQUEST_URI} !^/force_secret\.php$ [NC]
+RewriteCond %{REQUEST_URI} !^/debug_login\.php$ [NC]
+RewriteCond %{REQUEST_URI} !^/reset_admin_password\.php$ [NC]
+RewriteCond %{REQUEST_URI} !^/fix_admin_auth\.php$ [NC]
+RewriteCond %{REQUEST_URI} !^/migrate_rbac\.php$ [NC]
 RewriteRule ^(.*)$ index.php [QSA,L]

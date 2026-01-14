@@ -16,8 +16,10 @@ if (!defined('APP_INIT')) {
 // Alamat server API pusat (Ganti domain saat live)
 // API Configuration
 // PRODUCTION DOMAIN
-define('API_BASE_URL', 'https://api.sidiksae.my.id'); // No trailing slash, No /api suffix (handled by endpoints usually, but check)Kosongkan agar tidak ada /v1
-define('API_VERSION', ''); // Kosongkan agar tidak ada /v1
+define('API_BASE_URL', 'https://api.sidiksae.my.id'); // No trailing slash
+define('API_VERSION', ''); 
+define('IDENTITY_URL', 'https://id.sidiksae.my.id'); // Centralized Identity Service
+define('IDENTITY_VERSION', 'v1'); 
 
 /**
  * API Credentials

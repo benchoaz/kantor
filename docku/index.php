@@ -20,7 +20,7 @@ try {
     // Check if status column exists effectively by trying the query or just handling exception
     // We assume column existence check is skipped for performance, catch exception instead.
     
-    if (!has_role(['admin', 'pimpinan', 'operator'])) {
+    if (!is_management_role() && !has_role(['operator'])) {
         $where_dash[] = "k.created_by = ?";
         $params_dash[] = $_SESSION['user_id'];
     } else {
@@ -109,8 +109,8 @@ try {
     </div>
 </div>
 
-<?php if ($_SESSION['role'] === 'admin'): ?>
-<!-- Admin Management Management Panel -->
+<?php if (is_management_role()): ?>
+<!-- Admin & Management Panel -->
 <div class="row g-3 mb-5 animate-up" style="animation-delay: 0.1s;">
     <div class="col-12">
         <h5 class="fw-bold mb-3 d-flex align-items-center">
@@ -177,11 +177,11 @@ try {
 <?php endif; ?>
 
 <!-- Kamera Cepat Shortcut (Only show prominently for Staff, or secondary for Admin) -->
-<div class="row mb-5 animate-up" style="animation-delay: <?= ($_SESSION['role'] === 'admin') ? '0.2s' : '0.1s' ?>;">
+<div class="row mb-5 animate-up" style="animation-delay: <?= (is_management_role()) ? '0.2s' : '0.1s' ?>;">
     <div class="col-md-12">
         <a href="camera.php" class="text-decoration-none">
-            <div class="shortcut-iphone shadow-lg <?= ($_SESSION['role'] === 'admin') ? 'py-4' : '' ?>" style="<?= ($_SESSION['role'] === 'admin') ? 'background: #2d3436; opacity: 0.9;' : '' ?>">
-                <?php if ($_SESSION['role'] === 'admin'): ?>
+            <div class="shortcut-iphone shadow-lg <?= (is_management_role()) ? 'py-4' : '' ?>" style="<?= (is_management_role()) ? 'background: #2d3436; opacity: 0.9;' : '' ?>">
+                <?php if (is_management_role()): ?>
                     <div class="d-flex align-items-center px-4">
                         <div class="bg-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
                             <i class="bi bi-camera-fill text-dark"></i>

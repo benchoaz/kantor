@@ -31,4 +31,8 @@ class Response {
     public static function error($message, $status = 400, $errors = null) {
         self::json(null, $message, $status, $errors);
     }
+
+    public static function success($message, $data = null, $status = 200) {
+        self::json($data, $message, $status);
+    }
 }

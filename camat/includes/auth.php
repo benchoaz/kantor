@@ -55,10 +55,25 @@ function checkSessionTimeout() {
 function requireAuth() {
     startSession();
     
+    // PHASE B STEP B4: Edge case guards (check session integrity)
+    require_once __DIR__ . '/../auth/edge_case_guard.php';
+    guardAgainstEdgeCases();
+    
     if (!isLoggedIn() || !checkSessionTimeout()) {
         // SOLUSI: Gunakan path absolute web root agar tidak 404 saat redirect dari subdirectory
         header('Location: /login.php');
         exit;
+    }
+    
+    // PHASE B STEP B3: Token validation for Identity-based auth
+    // Only validate if user logged in via Identity Module
+    if (isset($_SESSION['auth_method']) && $_SESSION['auth_method'] === 'identity') {
+        require_once __DIR__ . '/../auth/token_guard.php';
+        validateTokenOrLogout();
+        
+        // PHASE B ENHANCEMENT: Sync role from API (not hardcoded)
+        require_once __DIR__ . '/../auth/role_sync.php';
+        syncRoleFromAPI();
     }
 }
 

@@ -1,17 +1,19 @@
-# Development and Local Tools
-start_local.sh
-stop_local.sh
-apply_local_config.php
-restore_prod_config.php
-*.log
-
-# Deployment Packages
+# User requested exclusions
+*.md
 *.tar.gz
+walkthrough*
+walkthrough/
 
-# Extra Documentation (keeping manifest for reference, but can be ignored if preferred)
-# DEPLOYMENT_MANIFEST.md
-# DEPLOY_*_README.md
-# UUID_*_GUIDE.md
-# MISSING_MIGRATIONS_README.md
-# MIGRATE_SURAT_TABLE.md
-# DEBUG_MULTIPART_ISSUE.md
+# Standard exclusions
+.env
+.DS_Store
+.idea/
+.vscode/
+.git/
+
+# Dependency directories
+vendor/
+node_modules/
+
+# Logs
+*.log

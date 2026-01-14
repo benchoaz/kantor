@@ -1,11 +1,31 @@
+# API Server .htaccess
+# Enable URL Rewriting for Clean API Endpoints
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    
+    
+    # Redirect all requests to index.php
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^ index.php [QSA,L]
+    RewriteRule ^(.*)$ index.php [QSA,L]
 </IfModule>
 
-<Files .env>
-    Order allow,deny
-    Deny from all
-</Files>
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Disable Directory Listing
+Options -Indexes
+
+# PHP Settings
+<IfModule mod_php.c>
+    php_value upload_max_filesize 20M
+    php_value post_max_size 25M
+    php_value max_execution_time 300
+    php_flag display_errors Off
+    php_flag log_errors On
+</IfModule>

@@ -4,21 +4,21 @@ $page_title = 'Detail Disposisi';
 $active_page = 'disposisi';
 
 require_once '../../config/database.php';
+require_once '../../includes/auth.php';
 require_once '../../includes/header.php';
-require_once '../../includes/notification_helper.php';
 
-$id = $_GET['id'] ?? 0;
-$userId = $_SESSION['user_id'];
+require_login();
 
-// Fetch Detail
 $id = $_GET['id'] ?? 0;
 $userId = $_SESSION['user_id'];
 
 // Fetch Detail
 $stmt = $pdo->prepare("
-    SELECT d.*, dp.id as penerima_id, dp.status as status_penerima, dp.tgl_dibaca, dp.tgl_dilaksanakan, dp.kegiatan_id
+    SELECT d.*, dp.id as penerima_id, dp.status as status_penerima, dp.tgl_dibaca,
+           s.perihal, s.nomor_surat
     FROM disposisi d
     JOIN disposisi_penerima dp ON d.id = dp.disposisi_id
+    LEFT JOIN surat s ON d.uuid_surat = s.uuid
     WHERE d.id = ? AND dp.user_id = ?
 ");
 $stmt->execute([$id, $userId]);
@@ -57,7 +57,7 @@ elseif ($data['status_penerima'] === 'dilaksanakan') $statusBadge = '<span class
             <div class="card-header bg-white border-bottom p-4">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <h5 class="text-muted small fw-bold mb-1">DISPOSISI #<?= htmlspecialchars($data['external_id']) ?></h5>
+                        <h5 class="text-muted small fw-bold mb-1">DISPOSISI #<?= substr($data['uuid'], 0, 8) ?></h5>
                         <h2 class="fw-bold text-primary mb-0"><?= htmlspecialchars($data['perihal']) ?></h2>
                     </div>
                     <?php echo $statusBadge; ?>
@@ -73,23 +73,23 @@ elseif ($data['status_penerima'] === 'dilaksanakan') $statusBadge = '<span class
                     </div>
                     <div class="col-md-6">
                         <small class="text-muted d-block fw-bold">TANGGAL DISPOSISI</small>
-                        <span class="fs-5"><?= date('d F Y H:i', strtotime($data['tgl_disposisi'])) ?></span>
+                        <span class="fs-5"><?= date('d F Y H:i', strtotime($data['tgl_disposisi'] ?? $data['created_at'])) ?></span>
                     </div>
                 </div>
 
                 <!-- Instruction Box -->
                 <div class="bg-light p-4 rounded-3 border-start border-4 border-primary mb-4">
                     <small class="text-muted fw-bold mb-2 d-block">INSTRUKSI PIMPINAN:</small>
-                    <p class="fs-5 mb-0" style="white-space: pre-line;"><?= htmlspecialchars($data['instruksi']) ?></p>
+                    <p class="fs-5 mb-0" style="white-space: pre-line;"><?= htmlspecialchars($data['instruksi'] ?? $data['catatan'] ?? '') ?></p>
                 </div>
 
                 <!-- Action Section -->
-                <?php if ($data['status_penerima'] !== 'dilaksanakan'): ?>
+                <?php if ($data['status_penerima'] !== 'selesai'): ?>
                     <div class="alert alert-info d-flex align-items-center mb-4">
                         <i class="bi bi-info-circle-fill fs-4 me-3"></i>
                         <div>
-                            <strong>Tindak Lanjut Diperlukan</strong>
-                            <div class="small">Silakan laksanakan tugas ini dan dokumentasikan hasilnya melalui BESUK SAE untuk verifikasi.</div>
+                            <strong>Tindak Lanjuti Diperlukan</strong>
+                            <div class="small">Silakan laksanakan tugas ini sesuai instruksi pimpinan.</div>
                         </div>
                     </div>
 
@@ -99,20 +99,11 @@ elseif ($data['status_penerima'] === 'dilaksanakan') $statusBadge = '<span class
                         </a>
                     </div>
                 <?php else: ?>
-                    <!-- If already executed, show evidence link -->
                     <div class="card bg-success bg-opacity-10 border-success mb-3">
                         <div class="card-body text-center text-success">
                             <i class="bi bi-check-circle-fill fs-1 mb-2"></i>
                             <h4 class="fw-bold">Telah Dilaksanakan</h4>
-                            <p class="mb-3">Disposisi ini telah diselesaikan pada <?= date('d M Y H:i', strtotime($data['tgl_dilaksanakan'])) ?>.</p>
-                            
-                            <?php if ($data['kegiatan_id']): ?>
-                                <a href="../../kegiatan_detail.php?id=<?= $data['kegiatan_id'] ?>" class="btn btn-success">
-                                    Lihat Bukti Dokumentasi
-                                </a>
-                            <?php else: ?>
-                                <span class="text-muted fw-bold">Bukti terlampir di e-Kinerja</span>
-                            <?php endif; ?>
+                            <p class="mb-0">Disposisi ini telah diselesaikan.</p>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -121,7 +112,7 @@ elseif ($data['status_penerima'] === 'dilaksanakan') $statusBadge = '<span class
             
             <!-- Audit Trail (Simple) -->
             <div class="card-footer bg-light p-3 small text-muted">
-                <i class="bi bi-shield-lock me-1"></i> Data Integrity Hash: <code><?= substr($data['payload_hash'], 0, 16) ?>...</code>
+                <i class="bi bi-shield-lock me-1"></i> Data Integrity Hash: <code><?= substr(md5($data['uuid'] ?? ''), 0, 16) ?>...</code>
             </div>
         </div>
     </div>

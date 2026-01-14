@@ -1,11 +1,15 @@
 <?php
 /**
- * Login Page - BESUKSAE
+ * Login Page - BESUKSAE (Hardened with Identity Delegation)
  * Desain modern, ringan, dan responsive untuk Kantor Kecamatan Besuk.
  * Tanpa framework berat, cocok untuk shared hosting cPanel.
  */
 require_once 'config/database.php';
 require_once 'includes/auth.php';
+
+// Load Integration Config for Identity Service
+$intConfig = @require 'config/integration.php' ?: [];
+$idConfig = $intConfig['sidiksae'] ?? [];
 
 if (is_logged_in()) {
     header("Location: index.php");
@@ -19,19 +23,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
 
     if ($username && $password) {
-        $stmt = $pdo->prepare("SELECT id, nama, password, role FROM users WHERE username = ?");
-        $stmt->execute([$username]);
-        $user = $stmt->fetch();
+        // 1. DELEGATE AUTHENTICATION TO IDENTITY SERVICE
+        $ch = curl_init($idConfig['identity_url'] . '/auth/login');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+            'username' => $username,
+            'password' => $password,
+            'device_type' => 'web_docku'
+        ]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-APP-ID: ' . $idConfig['app_id'],
+            'X-APP-KEY: ' . $idConfig['api_key']
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['nama'] = $user['nama'];
-            $_SESSION['role'] = $user['role'];
-            $_SESSION['last_activity'] = time(); // Set initial activity time
-            header("Location: index.php");
-            exit;
+        $result = json_decode($response, true);
+
+        // 2. CHECK IDENTITY RESPONSE
+        if ($httpCode === 200 && isset($result['status']) && $result['status'] === 'success') {
+            // Identity confirmed! Now fetch local permissions
+            $stmt = $pdo->prepare("SELECT id, nama, role FROM users WHERE username = ?");
+            $stmt->execute([$username]);
+            $user = $stmt->fetch();
+
+            if ($user) {
+                // SUCCESS: Set Local Session
+                $_SESSION['user_id']      = $user['id'];
+                $_SESSION['nama']         = $user['nama'];
+                $_SESSION['role']         = $user['role'];
+                $_SESSION['last_activity'] = time();
+                
+                // Store Identity Tokens for API calls
+                $_SESSION['access_token']  = $result['data']['access_token'];
+                $_SESSION['refresh_token'] = $result['data']['refresh_token'];
+                $_SESSION['uuid_user']     = $result['data']['uuid_user'];
+
+                header("Location: index.php");
+                exit;
+            } else {
+                $error = 'Akun terverifikasi tapi data organisasi di DocKu tidak ditemukan.';
+            }
         } else {
-            $error = 'Username atau password salah.';
+            // Authentication Failed
+            $error = $result['message'] ?? 'Username atau password salah.';
+            if ($httpCode === 0) $error = 'Layanan autentikasi sedang tidak tersedia';
         }
     } else {
         $error = 'Silakan isi semua field.';

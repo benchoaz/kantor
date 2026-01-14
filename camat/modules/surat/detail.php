@@ -299,7 +299,7 @@ $flash = get_flash();
                             $resTargets = call_api('GET', ENDPOINT_DAFTAR_TUJUAN, [], $token);
                             $targets = [];
                             
-                            if ($resTargets['success'] && is_array($resTargets['data'])) {
+                            if ($resTargets['success'] && !empty($resTargets['data'])) {
                                 $targets = $resTargets['data'];
                             } else {
                                 // Fallback to standard structural roles if API is not ready
@@ -311,15 +311,25 @@ $flash = get_flash();
                             }
 
                             foreach($targets as $item): 
-                                // Support both string array or object array with 'full_name'/'jabatan'
-                                $targetValue = is_array($item) ? ($item['jabatan'] ?? $item['name'] ?? 'Unknown') : $item;
-                                $targetDisplay = is_array($item) ? ($item['full_name'] ?? $item['jabatan'] ?? $item['name'] ?? $item) : $item;
+                                // Logic: Use role_slug for distribution (Stabil/Positions)
+                                $target_value = is_array($item) ? ($item['role_slug'] ?? $item['jabatan'] ?? '') : $item;
+                                $target_id = is_array($item) ? ($item['user_id'] ?? '') : '';
+                                
+                                // Main Label = Jabatan/Role
+                                $main_label = is_array($item) ? ($item['jabatan'] ?? $item['role'] ?? $item['name'] ?? $item) : $item;
+                                // Sub Label = Full Name (Small)
+                                $sub_label = is_array($item) ? ($item['full_name'] ?? '') : '';
                             ?>
                             <label class="flex items-center p-3 rounded-lg border border-slate-200 hover:bg-emerald-50/50 cursor-pointer transition-all group has-[:checked]:bg-emerald-50 has-[:checked]:border-emerald-500 has-[:checked]:shadow-sm">
                                 <div class="relative flex items-center">
-                                    <input type="checkbox" name="diteruskan_kepada[]" value="<?= htmlspecialchars($targetValue) ?>" class="peer w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-transform active:scale-95">
+                                    <input type="checkbox" name="diteruskan_kepada[]" value="<?= htmlspecialchars($target_value) ?>" data-user-id="<?= htmlspecialchars($target_id) ?>" class="peer w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-transform active:scale-95">
                                 </div>
-                                <span class="ml-3 text-sm font-medium text-slate-700 group-hover:text-slate-900 group-has-[:checked]:text-emerald-900 transition-colors"><?= htmlspecialchars($targetDisplay) ?></span>
+                                <div class="ml-3 flex flex-col">
+                                    <span class="text-sm font-bold text-slate-800 group-has-[:checked]:text-emerald-900 transition-colors"><?= htmlspecialchars(strtoupper($main_label)) ?></span>
+                                    <?php if($sub_label && strtolower($sub_label) !== strtolower($main_label)): ?>
+                                        <span class="text-[10px] text-slate-500 font-medium tracking-tight"><?= htmlspecialchars($sub_label) ?></span>
+                                    <?php endif; ?>
+                                </div>
                             </label>
                             <?php endforeach; ?>
                         </div>

@@ -3,6 +3,8 @@
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../core/Response.php';
+require_once __DIR__ . '/../core/DisposisiFlowValidator.php';
+require_once __DIR__ . '/../core/DisposisiAuditLogger.php';
 
 class DisposisiController {
     private $db;
@@ -25,6 +27,11 @@ class DisposisiController {
         // 2. Try $_SERVER (Nginx/FPM)
         if (!$apiKey) {
             $apiKey = $_SERVER['HTTP_X_API_KEY'] ?? $_SERVER['http_x_api_key'] ?? null;
+        }
+
+        // 3. Fallback to Query Parameter (Fix for Shared Hosting stripping headers)
+        if (!$apiKey) {
+            $apiKey = $_GET['api_key'] ?? $_POST['api_key'] ?? null;
         }
 
         if (!$apiKey) {
@@ -134,22 +141,47 @@ class DisposisiController {
             Response::error("Validation Failed: penerima list is required.");
         }
         
-        // MANIFESTO RULE: Sender is MANDATORY and CANNOT be Admin
-        if (empty($data['sender_id'])) {
-             Response::error("Validation Failed: sender_id is required (User Operasional).");
+        // ==================================================================
+        // ROLE-BASED VALIDATION (New Architecture)
+        // ==================================================================
+        
+        // Validate from/to structure
+        if (empty($data['from']['user_id'])) {
+            Response::error("Validation Failed: from.user_id is required", 422);
+        }
+        if (empty($data['from']['role'])) {
+            Response::error("Validation Failed: from.role is required", 422);
+        }
+        if (empty($data['to']['role'])) {
+            Response::error("Validation Failed: to.role is required", 422);
         }
         
-        // Validate Sender Role
-        $checkSender = $this->conn->prepare("SELECT role FROM users WHERE id = :uid");
-        $checkSender->execute([':uid' => $data['sender_id']]);
-        $senderRole = $checkSender->fetchColumn();
+        // Get sender info from database (using UUID)
+        $checkSender = $this->conn->prepare("SELECT role, nama FROM users WHERE uuid_user = :uuid");
+        $checkSender->execute([':uuid' => $data['from']['user_id']]);
+        $sender = $checkSender->fetch(PDO::FETCH_ASSOC);
         
-        if (!$senderRole) {
-             Response::error("Sender not found.", 404);
+        if (!$sender) {
+            Response::error("Sender not found", 404);
         }
-        if ($senderRole === 'admin' || $senderRole === 'system_admin') {
-             Response::error("VIOLATION: Administrator DILARANG melakukan disposisi!", 403);
+        
+        // MANIFESTO: Admin cannot disposisi
+        if ($sender['role'] === 'admin' || $sender['role'] === 'system_admin') {
+            Response::error("VIOLATION: Administrator DILARANG melakukan disposisi!", 403);
         }
+        
+        // Validate complete request with flow rules
+        $validation = DisposisiFlowValidator::validateRequest($data, $sender['role']);
+        if (!$validation['valid']) {
+            Response::error($validation['errors'], 422);
+        }
+        
+        // Log validation success
+        $this->logActivity('DISPOSISI_VALIDATION_SUCCESS', $data['uuid_surat'], json_encode([
+            'from_role' => $data['from']['role'],
+            'to_role' => $data['to']['role'],
+            'flow_valid' => true
+        ]));    
 
         // ========== SURAT AUTO-REGISTRATION (BACKWARD COMPATIBLE) ==========
         // Check if surat already registered
@@ -236,17 +268,27 @@ class DisposisiController {
             );
             $timestamp = date('Y-m-d H:i:s');
             
-            // A. Insert Disposisi
-            // A. Insert Disposisi
-            // ADDED: created_by from sender_id
-            $stmt = $this->conn->prepare("INSERT INTO disposisi (uuid, uuid_surat, sifat, catatan, deadline, status, created_by, created_at, updated_at) VALUES (:uuid, :uuid_surat, :sifat, :catatan, :deadline, 'BARU', :sender, :created_at, :updated_at)");
+            // A. Insert Disposisi (ROLE-BASED)
+            $stmt = $this->conn->prepare("
+                INSERT INTO disposisi (
+                    uuid, uuid_surat, from_role, to_role,
+                    sifat, catatan, deadline, status,
+                    created_by, created_at, updated_at
+                ) VALUES (
+                    :uuid, :uuid_surat, :from_role, :to_role,
+                    :sifat, :catatan, :deadline, 'BARU',
+                    :created_by, :created_at, :updated_at
+                )
+            ");
             $stmt->execute([
                 ':uuid' => $uuid_disposisi,
                 ':uuid_surat' => $data['uuid_surat'],
+                ':from_role' => $data['from']['role'],
+                ':to_role' => $data['to']['role'],
                 ':sifat' => $data['sifat'] ?? 'BIASA',
                 ':catatan' => $data['catatan'] ?? '',
                 ':deadline' => $data['deadline'] ?? null,
-                ':sender' => $data['sender_id'],
+                ':created_by' => $data['from']['user_id'],
                 ':created_at' => $timestamp,
                 ':updated_at' => $timestamp
             ]);
@@ -258,16 +300,26 @@ class DisposisiController {
             $penerima_ids = [];
             
             // Loop Penerima
-            // Loop Penerima
-            $stmt_penerima = $this->conn->prepare("INSERT INTO disposisi_penerima (disposisi_uuid, user_id, tipe_penerima, status) VALUES (:uuid, :user_id, :tipe, 'baru')");
+            $stmt_penerima = $this->conn->prepare("
+                INSERT INTO disposisi_penerima (disposisi_uuid, user_id, to_role, tipe_penerima, status) 
+                VALUES (:uuid, :user_id, :to_role, :tipe, 'baru')
+            ");
             
             foreach ($data['penerima'] as $p) {
+                $uid = $p['user_id'];
+                $is_numeric = is_numeric($uid);
+                
                 $stmt_penerima->execute([
                     ':uuid' => $uuid_disposisi,
-                    ':user_id' => $p['user_id'],
+                    ':user_id' => $is_numeric ? (int)$uid : null,
+                    ':to_role' => $is_numeric ? null : $uid,
                     ':tipe' => $p['tipe'] ?? 'TINDAK_LANJUT'
                 ]);
-                $penerima_ids[] = $p['user_id'];
+                
+                // Track for instruction children
+                if ($is_numeric) {
+                    $penerima_ids[] = (int)$uid;
+                }
             }
 
             // Loop Instruksi
@@ -300,11 +352,33 @@ class DisposisiController {
             }
 
             $this->conn->commit();
+            
+            // ==================================================================
+            // AUDIT LOGGING (BPK/Inspektorat Compliance)
+            // ==================================================================
+            $auditLogger = new DisposisiAuditLogger($this->conn);
+            $auditLogger->logCreate(
+                $uuid_disposisi,
+                $data['from']['user_id'],
+                $data['from']['role'],
+                $data['uuid_surat'],
+                $data['to']['role'],
+                [
+                    'instruksi' => $data['instruksi'] ?? [],
+                    'sifat' => $data['sifat'] ?? 'BIASA',
+                    'deadline' => $data['deadline'] ?? null,
+                    'catatan' => $data['catatan'] ?? '',
+                    'source_app' => $data['from']['source'] ?? 'camat',
+                    'penerima_count' => count($data['penerima'])
+                ]
+            );
 
             $responsePayload = [
                 'uuid_disposisi' => $uuid_disposisi,
                 'status' => 'TERKIRIM',
-                'created_at' => $timestamp
+                'created_at' => $timestamp,
+                'from_role' => $data['from']['role'],
+                'to_role' => $data['to']['role']
             ];
 
             // C. Log Response
@@ -320,7 +394,63 @@ class DisposisiController {
         }
     }
 
-    // 2. GET DISPOSISI BY PENERIMA - UUID Version (Docku -> API)
+    // 2. GET DISPOSISI BY ROLE (Docku -> API)
+    // Supports role-based distribution as requested by user
+    public function getByRole($role_name) {
+        $this->authenticate();
+        
+        if (empty($role_name)) {
+            Response::error("Role name required", 400);
+        }
+
+        try {
+            // Fetch Disposisi where to_role matches
+            $sql = "
+                SELECT 
+                    d.uuid, 
+                    d.uuid_surat, 
+                    d.sifat, 
+                    d.catatan, 
+                    d.deadline, 
+                    d.status as status_global,
+                    d.created_at,
+                    s.nomor_surat,
+                    s.perihal,
+                    s.pengirim as asal_surat,
+                    s.tanggal_surat,
+                    dp.status as status_personal,
+                    dp.to_role as target_role
+                FROM disposisi d
+                JOIN disposisi_penerima dp ON d.uuid = dp.disposisi_uuid
+                JOIN surat s ON d.uuid_surat = s.uuid
+                WHERE (dp.to_role = :role1 OR d.to_role = :role2)
+                AND (dp.status != 'dilaksanakan' OR dp.status IS NULL)
+                ORDER BY d.created_at DESC
+            ";
+
+            $stmt = $this->conn->prepare($sql);
+            $stmt->execute([':role1' => $role_name, ':role2' => $role_name]);
+            $disposisi_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Fetch Instructions for each disposisi
+            foreach ($disposisi_list as &$item) {
+                 $stmt_ins = $this->conn->prepare("
+                    SELECT i.id, i.isi, i.target_selesai 
+                    FROM instruksi i 
+                    WHERE i.disposisi_uuid = :duuid
+                 ");
+                 $stmt_ins->execute([':duuid' => $item['uuid']]);
+                 $item['instruksi'] = $stmt_ins->fetchAll(PDO::FETCH_ASSOC);
+            }
+
+            Response::json($disposisi_list, "Data retrieved for role: $role_name");
+
+        } catch (Exception $e) {
+            Response::error("Sync Error: " . $e->getMessage(), 500);
+        }
+    }
+
+    // 2.1 GET DISPOSISI BY PENERIMA - UUID Version (Docku -> API)
     public function getByPenerimaUuid($user_uuid) {
         $this->authenticate();
         
@@ -334,8 +464,8 @@ class DisposisiController {
         }
 
         try {
-            // Get user_id from UUID
-            $userStmt = $this->conn->prepare("SELECT id FROM users WHERE uuid = :uuid");
+            // Get user_id from UUID (Corrected column name: uuid_user)
+            $userStmt = $this->conn->prepare("SELECT id FROM users WHERE uuid_user = :uuid");
             $userStmt->execute([':uuid' => $user_uuid]);
             $user = $userStmt->fetch(PDO::FETCH_ASSOC);
             
@@ -355,9 +485,14 @@ class DisposisiController {
                     d.deadline, 
                     d.status as status_global,
                     dp.status as status_personal,
-                    d.created_at
+                    d.created_at,
+                    s.nomor_surat,
+                    s.perihal,
+                    s.pengirim as asal_surat,
+                    s.tanggal_surat
                 FROM disposisi d
                 JOIN disposisi_penerima dp ON d.uuid = dp.disposisi_uuid
+                JOIN surat s ON d.uuid_surat = s.uuid
                 WHERE dp.user_id = :uid
                 AND dp.status != 'dilaksanakan'
                 ORDER BY d.created_at DESC
@@ -494,7 +629,7 @@ class DisposisiController {
         try {
             // Check if any disposition exists for this letter
             $stmt = $this->conn->prepare("
-                SELECT d.uuid, dp.status, dp.laporan, u.nama_lengkap as penerima
+                SELECT d.uuid, dp.status, dp.laporan, u.nama as penerima
                 FROM disposisi d
                 JOIN disposisi_penerima dp ON d.uuid = dp.disposisi_uuid
                 JOIN users u ON dp.user_id = u.id
@@ -549,7 +684,7 @@ class DisposisiController {
         // But here we might want to filter by creator? For generic "Pimpinan", show all?
         
         $sql = "SELECT d.uuid as id, d.uuid_surat, d.sifat, d.catatan, d.deadline, 
-                       dp.status, dp.laporan, u.nama_lengkap as tujuan, dp.updated_at
+                       dp.status, dp.laporan, u.nama as tujuan, dp.updated_at
                 FROM disposisi d
                 JOIN disposisi_penerima dp ON d.uuid = dp.disposisi_uuid
                 LEFT JOIN users u ON dp.user_id = u.id

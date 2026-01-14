@@ -7,6 +7,9 @@ Options -Indexes
     Deny from all
 </FilesMatch>
 
-# Protect config and includes folders
+# Protect config and includes folders (EXCEPT storage/surat for PDF access)
 RewriteEngine On
-RewriteRule ^(config|includes|storage|database|templates|modules)/.*$ - [F,L]
+RewriteRule ^(config|includes|database|templates|modules)/.*$ - [F,L]
+
+# Allow storage/surat for PDF downloads
+# storage/surat is accessible for PDFs

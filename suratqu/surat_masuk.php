@@ -7,10 +7,58 @@ require_auth();
 
 include 'includes/header.php';
 
-// Fetch Surat Masuk
-$query = "SELECT * FROM surat_masuk ORDER BY tgl_diterima DESC";
-$stmt = $db->query($query);
-$surat_masuk = $stmt->fetchAll();
+// Fetch Surat Masuk Logic (Hybrid: API for Pimpinan, Local for Operator)
+$is_pimpinan_mode = (isset($_SESSION['role']) && in_array(strtolower($_SESSION['role']), ['camat', 'pimpinan', 'sekcam']));
+
+if ($is_pimpinan_mode) {
+    // CAMAT/PIMPINAN MODE: Fetch from Master Event Store API (Step C3)
+    try {
+        $apiConfig = require 'config/integration.php';
+        if (isset($apiConfig['sidiksae']['enabled']) && $apiConfig['sidiksae']['enabled']) {
+            require_once 'includes/sidiksae_api_client.php';
+            $client = new SidikSaeApiClient($apiConfig['sidiksae']);
+            
+            // Fetch from API
+            $res = $client->getSuratMasuk(['limit' => 50]);
+            
+            if ($res['success']) {
+                $raw_items = $res['data']['items'] ?? [];
+                
+                // Map API fields to Local View fields
+                $surat_masuk = array_map(function($item) {
+                    return [
+                        'id_sm' => $item['uuid'], // Use UUID as ID
+                        'no_agenda' => 'API', // No agenda in event store yet (or derived)
+                        'asal_surat' => $item['pengirim'] ?? $item['asal_surat'],
+                        'no_surat' => $item['nomor_surat'],
+                        'perihal' => $item['perihal'],
+                        'tgl_surat' => $item['tanggal_surat'],
+                        'status' => strtolower($item['status']),
+                        'tujuan' => '-', // Not in list view usually
+                        'file_path' => $item['scan_surat'], // URL
+                        'is_api_data' => true
+                    ];
+                }, $raw_items);
+            } else {
+                $error_msg = "Gagal mengambil data dari Pusat: " . $res['message'];
+                $surat_masuk = [];
+            }
+        } else {
+            // Fallback if API disabled
+             $query = "SELECT * FROM surat_masuk ORDER BY tgl_diterima DESC";
+             $stmt = $db->query($query);
+             $surat_masuk = $stmt->fetchAll();
+        }
+    } catch (Exception $e) {
+        $error_msg = "Error koneksi ke Pusat: " . $e->getMessage();
+        $surat_masuk = [];
+    }
+} else {
+    // OPERATOR MODE: Fetch from Local DB
+    $query = "SELECT * FROM surat_masuk ORDER BY tgl_diterima DESC";
+    $stmt = $db->query($query);
+    $surat_masuk = $stmt->fetchAll();
+}
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 pt-2">

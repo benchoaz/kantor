@@ -5,6 +5,17 @@ require_once 'config/database.php';
 require_once 'includes/functions.php';
 
 $id_sm = $_GET['id_sm'] ?? null;
+
+// Session check - CRITICAL FIX
+if (!isset($_SESSION['id_user'])) {
+    $_SESSION['alert'] = [
+        'msg' => 'Silakan login terlebih dahulu untuk mengakses disposisi',
+        'type' => 'error'
+    ];
+    header("Location: login.php");
+    exit;
+}
+
 $my_id = $_SESSION['id_user'];
 
 // STRICT RULE: Manual Disposisi di SuratQu NON-AKTIFkan.
@@ -23,7 +34,7 @@ if ($id_sm) {
     
     // Fetch Disposisi Masuk
     $stmt = $db->prepare("SELECT d.*, 
-                                 sm.asal_surat, sm.no_surat, sm.perihal, sm.tgl_surat, sm.file_path,
+                                 sm.asal_surat, sm.no_surat, sm.perihal, sm.tgl_surat, sm.scan_surat,
                                  u.nama_lengkap as pengirim_nama, j.nama_jabatan as pengirim_jabatan
                           FROM disposisi d
                           JOIN surat_masuk sm ON d.id_sm = sm.id_sm

@@ -1,67 +1,102 @@
 <?php
 // modules/disposisi/index.php
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
+
 $page_title = 'Disposisi Masuk';
 $active_page = 'disposisi';
 
 require_once '../../config/database.php';
-require_once '../../includes/header.php';
+require_once '../../includes/auth.php';
+
+// require_once '../../includes/auth.php'; // Already included in header.php potentially, but safer here
+
+require_login();
 require_once '../../includes/notification_helper.php';
+include '../../includes/header.php';
 
-// Prepare Filters
-$statusFilter = $_GET['status'] ?? 'all';
-$filterUser = $_GET['user_id'] ?? null;
-$isAdmin = ($_SESSION['role'] === 'admin');
-$currentUserId = $_SESSION['user_id'];
+try {
+    // Get user info for role-based filtering
+    $user_id = $_SESSION['user_id'];
+    $user_uuid = $_SESSION['user']['uuid'] ?? null; //  UUID from Identity
+    $user_role = $_SESSION['user']['role'] ?? 'staff'; // Role from role_sync
 
-// Build Stats Query (Based on Role)
-$statsSql = "SELECT 
-    COUNT(*) as total,
-    SUM(CASE WHEN dp.status = 'baru' THEN 1 ELSE 0 END) as baru,
-    SUM(CASE WHEN dp.status = 'dilaksanakan' THEN 1 ELSE 0 END) as selesai
-    FROM disposisi_penerima dp";
-$statsParams = [];
+    // Prepare Filters (Keep for potential future use or other parts of the page)
+    $statusFilter = $_GET['status'] ?? 'all';
+    $filterUser = $_GET['user_id'] ?? null;
+    $isAdmin = ($_SESSION['role'] === 'admin'); // Still needed for admin-specific UI elements
 
-if (!$isAdmin) {
-    $statsSql .= " WHERE dp.user_id = ?";
-    $statsParams[] = $currentUserId;
-}
-$statsStmt = $pdo->prepare($statsSql);
-$statsStmt->execute($statsParams);
-$stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+    // Count Disposisi (Role-based + User match)
+    // TEMPORARY FIX: Remove to_role filter if it causes issues, rely on dp.user_id
+    $countQuery = "
+        SELECT COUNT(DISTINCT d.id) as total
+        FROM disposisi d
+        JOIN disposisi_penerima dp ON d.uuid = dp.disposisi_uuid
+        WHERE dp.user_id = :user_id
+    ";
+    $stmtCount = $pdo->prepare($countQuery);
+    $stmtCount->execute([
+        ':user_id' => $user_id
+    ]);
+    $totalDisposisi = $stmtCount->fetchColumn();
 
-// Build Main List Query
-$sql = "SELECT d.*, dp.status as status_penerima, dp.id as penerima_id, u.nama as nama_penerima 
-        FROM disposisi d 
-        JOIN disposisi_penerima dp ON d.id = dp.disposisi_id 
-        JOIN users u ON dp.user_id = u.id 
-        WHERE 1=1";
-$params = [];
+    // Fetch Disposisi List
+    $query = "
+        SELECT d.*,
+               dp.status as status_penerima,
+               dp.updated_at as status_updated_at,
+               s.nomor_surat,
+               s.perihal,
+               s.asal_surat,
+               s.tanggal_surat,
+               u.nama as nama_penerima
+        FROM disposisi d
+        JOIN disposisi_penerima dp ON d.uuid = dp.disposisi_uuid
+        LEFT JOIN surat s ON d.uuid_surat = s.uuid
+        LEFT JOIN users u ON dp.user_id = u.id
+        WHERE dp.user_id = :user_id
+        ORDER BY d.created_at DESC
+    ";
 
-if (!$isAdmin) {
-    // Regular users only see their own
-    $sql .= " AND dp.user_id = ?";
-    $params[] = $currentUserId;
-} else if ($filterUser) {
-    // Admin can filter by specific user
-    $sql .= " AND dp.user_id = ?";
-    $params[] = $filterUser;
-}
+    $stmt = $pdo->prepare($query);
+    $stmt->execute([
+        ':user_id' => $user_id
+    ]);
 
-if ($statusFilter !== 'all') {
-    $sql .= " AND dp.status = ?";
-    $params[] = $statusFilter;
-}
+    $disposisiList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$sql .= " ORDER BY dp.status = 'baru' DESC, d.created_at DESC";
+    // Fetch Users for Filter (Admin Only)
+    $userList = [];
+    if ($isAdmin) {
+        $userList = $pdo->query("SELECT id, nama FROM users ORDER BY nama ASC")->fetchAll();
+    }
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$disposisiList = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Calculate Stats for Dashboard Cards
+    $stats = ['total' => 0, 'baru' => 0, 'selesai' => 0];
 
-// Fetch Users for Filter (Admin Only)
-$userList = [];
-if ($isAdmin) {
-    $userList = $pdo->query("SELECT id, nama FROM users ORDER BY nama ASC")->fetchAll();
+    $statsQuery = "
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN dp.status IN ('baru', 'dibaca') THEN 1 ELSE 0 END) as baru,
+            SUM(CASE WHEN dp.status = 'completed' OR dp.status = 'selesai' THEN 1 ELSE 0 END) as selesai
+        FROM disposisi d
+        JOIN disposisi_penerima dp ON d.uuid = dp.disposisi_uuid
+        WHERE dp.user_id = :user_id
+    ";
+    $stmtStats = $pdo->prepare($statsQuery);
+    $stmtStats->execute([
+        ':user_id' => $user_id
+    ]);
+    $resStats = $stmtStats->fetch(PDO::FETCH_ASSOC);
+    if ($resStats) $stats = $resStats;
+
+} catch (PDOException $e) {
+    echo "<div style='background:#fdeaea; color:#b02a37; padding:20px; border:1px solid #f5c2c7; border-radius:8px; margin:20px;'>";
+    echo "<h4 style='margin-top:0;'>🛑 Database Error (Debug Mode)</h4>";
+    echo "<b>Message:</b> " . htmlspecialchars($e->getMessage()) . "<br>";
+    echo "<b>Query:</b> Pelajari query di index.php line 25-90.<br>";
+    echo "</div>";
+    die();
 }
 ?>
 
@@ -141,7 +176,7 @@ if ($isAdmin) {
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $statusFilter == 'baru' ? 'active' : '' ?>" href="?status=baru&user_id=<?= $filterUser ?>">
-                    Baru <span class="badge bg-danger ms-1"><?= $isAdmin ? $stats['baru'] : getUnreadDispositionCount($pdo, $currentUserId) ?></span>
+                    Baru <span class="badge bg-danger ms-1"><?= $isAdmin ? $stats['baru'] : getUnreadDispositionCount($pdo, $user_id) ?></span>
                 </a>
             </li>
             <li class="nav-item">
@@ -159,7 +194,7 @@ if ($isAdmin) {
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <span class="badge rounded-pill bg-light text-dark border">
-                                        SuratQu: #<?= htmlspecialchars($row['external_id']) ?>
+                                        #<?= substr($row['uuid'], 0, 8) ?>
                                     </span>
                                     <?php if($row['status_penerima'] == 'baru'): ?>
                                         <span class="badge bg-danger animate-pulse">BARU</span>
@@ -176,13 +211,13 @@ if ($isAdmin) {
                                         <i class="bi bi-person-fill me-1"></i>Untuk: <strong><?= htmlspecialchars($row['nama_penerima']) ?></strong>
                                     </div>
                                 <?php endif; ?>
-                                <p class="text-muted small mb-3 line-clamp-2"><?= htmlspecialchars($row['instruksi']) ?></p>
+                                <p class="text-muted small mb-3 line-clamp-2"><?= htmlspecialchars($row['instruksi'] ?? $row['catatan'] ?? '') ?></p>
                                 
                                 <div class="d-flex justify-content-between align-items-center mt-auto">
                                     <small class="text-muted">
-                                        <i class="bi bi-clock me-1"></i><?= date('d M H:i', strtotime($row['tgl_disposisi'])) ?>
+                                        <i class="bi bi-clock me-1"></i><?= date('d M H:i', strtotime($row['tgl_disposisi'] ?? $row['created_at'])) ?>
                                     </small>
-                                    <a href="detail.php?id=<?= $row['disposisi_id'] ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                    <a href="detail.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-outline-primary rounded-pill px-3">
                                         Buka Detail <i class="bi bi-arrow-right ms-1"></i>
                                     </a>
                                 </div>

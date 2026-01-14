@@ -5,10 +5,10 @@
  */
 
 return [
-    'host' => getenv('DB_ID_HOST') ?: 'localhost',
-    'database' => getenv('DB_ID_NAME') ?: 'sidiksae_id',
-    'username' => getenv('DB_ID_USER') ?: 'root',
-    'password' => getenv('DB_ID_PASS') ?: '',
+    'host' => 'localhost',
+    'database' => 'sidiksae_id',
+    'username' => 'sidiksae_user',
+    'password' => 'Belajaran123',
     'charset' => 'utf8mb4',
     'collation' => 'utf8mb4_unicode_ci',
     'options' => [

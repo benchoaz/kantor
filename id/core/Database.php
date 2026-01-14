@@ -16,7 +16,7 @@ class Database {
             $this->conn = new PDO($dsn, $config['username'], $config['password'], $config['options']);
         } catch (PDOException $e) {
             header('Content-Type: application/json');
-            echo json_encode(['error' => 'Connection failed: ' . $e->getMessage()]);
+            echo json_encode(['status' => 'error', 'message' => 'Layanan autentikasi sedang tidak tersedia']);
             exit;
         }
     }

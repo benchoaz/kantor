@@ -18,8 +18,37 @@ class Request {
     }
 
     public static function headers($key = null) {
-        $headers = getallheaders();
+        $headers = [];
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+        } else {
+            foreach ($_SERVER as $name => $value) {
+                if (substr($name, 0, 5) == 'HTTP_') {
+                    $headers[str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))))] = $value;
+                }
+            }
+        }
+
         if ($key === null) return $headers;
-        return $headers[$key] ?? ($headers[strtolower($key)] ?? null);
+        
+        // Direct match
+        if (isset($headers[$key])) return $headers[$key];
+        
+        // Case-insensitive match
+        foreach ($headers as $k => $v) {
+            if (strtolower($k) === strtolower($key)) return $v;
+        }
+
+        // Fallback to $_SERVER directly if not in getallheaders
+        $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $key));
+        return $_SERVER[$serverKey] ?? null;
+    }
+
+    public static function bearerToken() {
+        $header = self::headers('Authorization');
+        if (preg_match('/Bearer\s+(.*)$/i', $header, $matches)) {
+            return $matches[1];
+        }
+        return null;
     }
 }

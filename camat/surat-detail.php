@@ -24,6 +24,7 @@ if (!$suratId) {
 $api = new ApiClient();
 $response = $api->get(ENDPOINT_SURAT_DETAIL . '/' . $suratId);
 
+
 if (!$response['success'] || !isset($response['data'])) {
     setFlashMessage('error', 'Surat tidak ditemukan');
     redirect('surat-masuk.php');
@@ -31,6 +32,28 @@ if (!$response['success'] || !isset($response['data'])) {
 
 $surat = $response['data'];
 $pageTitle = 'Detail Lembar Disposisi';
+
+// [STEP C4] Fetch Recipients for Disposisi Modal
+$tujuanResponse = $api->get('/pimpinan/daftar-tujuan-disposisi');
+$daftarTujuan = [];
+if ($tujuanResponse['success'] && !empty($tujuanResponse['data'])) {
+    // Filter logic similar to disposisi.php
+    $daftarTujuan = array_filter($tujuanResponse['data'], function($u) {
+        $jabatanLower = strtolower($u['jabatan'] ?? '');
+        // Exclude self/unwanted roles if needed, currently accepting all downstream
+        return true; 
+    });
+} else {
+    // Fallback if API fails
+    $daftarTujuan = [
+        ['id' => 'sekcam', 'nama' => 'Sekretaris Kecamatan', 'jabatan' => 'Sekcam'],
+        ['id' => 'kasi_pemerintahan', 'nama' => 'Kasi Pemerintahan', 'jabatan' => 'Kasi'],
+        ['id' => 'kasi_pembangunan', 'nama' => 'Kasi Pembangunan', 'jabatan' => 'Kasi'],
+        ['id' => 'kasi_kesra', 'nama' => 'Kasi Kesra', 'jabatan' => 'Kasi'],
+        ['id' => 'kasubag_umum', 'nama' => 'Kasubag Umum & Kepegawaian', 'jabatan' => 'Kasubag'],
+        ['id' => 'kasubag_perencanaan', 'nama' => 'Kasubag Perencanaan & Keuangan', 'jabatan' => 'Kasubag']
+    ];
+}
 
 include 'includes/header.php';
 ?>
@@ -42,10 +65,10 @@ include 'includes/header.php';
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             Kembali
         </a>
-        <a href="disposisi.php?surat_id=<?php echo e($suratId); ?>" class="btn btn-primary">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalDisposisi">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
             Buat Disposisi
-        </a>
+        </button>
     </div>
 </div>
 
@@ -162,5 +185,7 @@ $scanSurat = $surat['scan_surat'] ?? $surat['file_url'] ?? '';
     <?php endforeach; ?>
 </div>
 <?php endif; ?>
+
+<?php include 'includes/modal_disposisi.php'; ?>
 
 <?php include 'includes/footer.php'; ?>

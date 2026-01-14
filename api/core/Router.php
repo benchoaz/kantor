@@ -23,8 +23,9 @@ class Router {
         
         foreach ($this->routes as $route) {
             if ($route['method'] === $method) {
-                // regex match
+                // pattern match
                 $pattern = "#^" . $route['path'] . "$#";
+                
                 if (preg_match($pattern, $uriPath, $matches)) {
                     array_shift($matches); // remove full match
                     
@@ -40,6 +41,6 @@ class Router {
             }
         }
 
-        Response::error("Endpoint Not Found", 404);
+        Response::error("Endpoint Not Found: " . $uriPath, 404);
     }
 }

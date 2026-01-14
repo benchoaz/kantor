@@ -29,34 +29,60 @@ $router = new Router();
 
 // 1. Create Disposisi
 $router->add('POST', '/api/disposisi', 'DisposisiController@create');
-$router->add('POST', '/api/disposisi/push', 'DisposisiController@create'); // Alias for SuratQu
+$router->add('POST', '/disposisi', 'DisposisiController@create'); // Alias
+$router->add('POST', '/api/disposisi/push', 'DisposisiController@create');
+$router->add('POST', '/disposisi/push', 'DisposisiController@create'); // Alias
 
-// 2. Get Disposisi for Receiver (Docku) - UUID Version
-$router->add('GET', '/api/disposisi/penerima/(\\S+)', 'DisposisiController@getByPenerimaUuid');
+// 2. Disposisi Endpoints
+$router->add('POST', '/api/v1/disposisi/create', 'DisposisiController@create');
+$router->add('POST', '/disposisi/create', 'DisposisiController@create');
 
-// Legacy endpoint (DEPRECATED) - for backward compatibility
-$router->add('GET', '/api/disposisi/penerima-legacy/(\\d+)', 'DisposisiController@getByPenerima');
+$router->add('GET', '/api/v1/disposisi/penerima/([^/]+)', 'DisposisiController@getByPenerimaUuid');
+$router->add('GET', '/disposisi/penerima/([^/]+)', 'DisposisiController@getByPenerimaUuid');
 
-// 3. Update Status (Docku)
-$router->add('POST', '/api/disposisi/status', 'DisposisiController@updateStatus');
+$router->add('GET', '/api/v1/disposisi/role/([^/]+)', 'DisposisiController@getByRole');
+$router->add('GET', '/disposisi/role/([^/]+)', 'DisposisiController@getByRole');
+$router->add('GET', '/v1/disposisi/role/([^/]+)', 'DisposisiController@getByRole');
 
-// 4. Monitoring (Camat)
-$router->add('GET', '/api/disposisi/monitoring', 'DisposisiController@monitoring');
-// Alias for compatibility
-$router->add('GET', '/api/pimpinan/monitoring', 'DisposisiController@monitoring');
+$router->add('POST', '/api/v1/disposisi/status', 'DisposisiController@updateStatus');
+$router->add('GET', '/api/v1/disposisi/check/([^/]+)', 'DisposisiController@checkStatus');
 
-// 5. Check Status (SuratQu)
-$router->add('GET', '/api/disposisi/check/(\S+)', 'DisposisiController@checkStatus');
+$router->add('GET', '/api/v1/pimpinan/monitoring', 'DisposisiController@monitoring');
+$router->add('GET', '/pimpinan/monitoring', 'DisposisiController@monitoring');
 
-// 5. REGISTRASI SURAT (Strict File Flow)
+// 5. PIMPINAN ENDPOINTS (Camat Dashboard)
+$router->add('GET', '/api/pimpinan/disposisi', 'DisposisiController@monitoring');
+$router->add('GET', '/pimpinan/disposisi', 'DisposisiController@monitoring'); // Alias
+
+// REGISTRASI SURAT
 require_once 'controllers/SuratController.php';
-$router->add('POST', '/api/surat', 'SuratController@register');
-$router->add('GET', '/api/surat', 'SuratController@listAll'); // List endpoint (must be before param route)
-$router->add('GET', '/api/surat/(\S+)', 'SuratController@getDetail');
+$router->add('POST', '/api/surat', 'SuratController@create');
+$router->add('POST', '/surat', 'SuratController@create'); 
+$router->add('GET', '/api/surat', 'SuratController@listForPimpinan');
+$router->add('GET', '/surat', 'SuratController@listForPimpinan');
+$router->add('GET', '/api/surat/(\\S+)', 'SuratController@getByUuid');
+$router->add('GET', '/surat/(\\S+)', 'SuratController@getByUuid');
 
-// Health Check endpoint (no auth required)
+// CAMAT DASHBOARD (Pimpinan)
+$router->add('GET', '/api/pimpinan/surat-masuk', 'SuratController@listForPimpinan');
+$router->add('GET', '/pimpinan/surat-masuk', 'SuratController@listForPimpinan');
+
+// DAFTAR TUJUAN DISPOSISI
+require_once 'controllers/PimpinanController.php';
+$router->add('GET', '/api/pimpinan/daftar-tujuan-disposisi', 'PimpinanController@daftarTujuanDisposisi');
+$router->add('GET', '/pimpinan/daftar-tujuan-disposisi', 'PimpinanController@daftarTujuanDisposisi');
+
+// 6. Check Status (SuratQu)
+$router->add('GET', '/api/disposisi/check/(\\S+)', 'DisposisiController@checkStatus');
+$router->add('GET', '/disposisi/check/(\\S+)', 'DisposisiController@checkStatus');
+
+// Health Check
 require_once 'controllers/HealthController.php';
 $router->add('GET', '/health', 'HealthController@check');
+$router->add('GET', '/api/health', 'HealthController@check');
+
+// Debug
+file_put_contents(__DIR__ . '/router_debug.txt', $_SERVER['REQUEST_URI'] . "\n", FILE_APPEND);
 
 // Dispatch
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

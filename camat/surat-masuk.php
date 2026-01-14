@@ -81,8 +81,8 @@ include 'includes/header.php';
     <!-- LIST CONTAINER -->
     <div style="display: grid; gap: 16px;">
     <?php foreach ($suratList as $surat): 
-        // SINGLE SOURCE OF TRUTH: Prioritize 'id_surat' (SuratQu ID) over internal 'id'
-        $linkId = $surat['id_surat'] ?? $surat['id'] ?? '';
+        // SINGLE SOURCE OF TRUTH: API returns 'uuid'. Use it.
+        $linkId = $surat['uuid'] ?? $surat['id_surat'] ?? $surat['id'] ?? '';
         
         $nomorSurat = !empty($surat['nomor_surat']) ? $surat['nomor_surat'] : '(Nomor Surat Kosong)';
         $asalSurat = !empty($surat['asal_surat']) ? $surat['asal_surat'] : (!empty($surat['pengirim']) ? $surat['pengirim'] : '(Asal Surat Tidak Diketahui)');

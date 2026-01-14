@@ -4,15 +4,25 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/helpers.php';
 require_login();
 
-// Determine Base URL
-$base_url = '';
-if (file_exists('config/database.php')) {
-    $base_url = '';
-} elseif (file_exists('../config/database.php')) {
+// Determine Base URL purely by directory depth from DOCUMENT_ROOT or relative paths
+$script_name = $_SERVER['SCRIPT_NAME'];
+$depth = substr_count($script_name, '/') - 1;
+if ($depth < 0) $depth = 0;
+
+// Robust detection: Look for assets folder
+if (file_exists('assets/css/modern-style.css')) {
+    $base_url = './';
+} elseif (file_exists('../assets/css/modern-style.css')) {
     $base_url = '../';
-} elseif (file_exists('../../config/database.php')) {
+} elseif (file_exists('../../assets/css/modern-style.css')) {
     $base_url = '../../';
+} else {
+    // Fallback to relative depth
+    $base_url = str_repeat('../', $depth);
 }
+// Clean base_url
+$base_url = rtrim($base_url, '/') . '/';
+if ($base_url == '/') $base_url = './';
 
 // Get user profile photo
 $user_photo = null;
@@ -46,13 +56,16 @@ if (isset($_SESSION['user_id'])) {
 </head>
 <body class="bg-light">
     <!-- Desktop Navbar (Hidden on Mobile) -->
-    <nav class="navbar navbar-expand-lg navbar-dark d-none d-lg-block mb-4 sticky-top shadow-sm" style="background-color: var(--primary-color);">
-        <div class="container">
+        <div class="container container-navbar">
+            <a class="navbar-brand d-flex align-items-center" href="<?= $base_url ?>index.php">
                 <div class="ms-1">
                     <div class="fw-bold lh-1" style="font-size: 1.1rem; letter-spacing: 0.5px;">BESUK SAE</div>
                     <div class="small fw-normal opacity-75" style="font-size: 0.7rem; letter-spacing: 0.2px;">Melayani setulus hati</div>
                 </div>
             </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <!-- Integration: Notification Logic -->
@@ -90,7 +103,7 @@ if (isset($_SESSION['user_id'])) {
                     <li class="nav-item">
                         <a class="nav-link <?= ($active_page == 'ekinerja') ? 'active' : '' ?>" href="<?= $base_url ?>ekinerja.php">e-Kinerja</a>
                     </li>
-                    <?php if ($_SESSION['role'] === 'admin'): ?>
+                    <?php if (is_management_role()): ?>
                     <li class="nav-item">
                         <a class="nav-link <?= ($active_page == 'rekapitulasi') ? 'active' : '' ?>" href="<?= $base_url ?>laporan_rekapitulasi.php">Rekap</a>
                     </li>
@@ -131,7 +144,8 @@ if (isset($_SESSION['user_id'])) {
 
     <!-- Mobile Header (Elegant Sage Style) -->
     <header class="d-lg-none header-elegant shadow-sm">
-        <div class="container d-flex justify-content-between align-items-center h-100 px-0">
+        <div class="container d-flex justify-content-between align-items-center h-100 px-3">
+            <a href="<?= $base_url ?>index.php" class="text-decoration-none d-flex align-items-center">
                 <div class="ms-1">
                     <span class="brand fw-extrabold d-block lh-1" style="color: var(--text-main); letter-spacing: -0.5px; font-size: 1.2rem;">BESUK SAE</span>
                     <span class="small text-muted fw-bold d-block" style="font-size: 0.65rem; color: var(--primary-color) !important; letter-spacing: 0.2px; text-transform: lowercase;">Melayani setulus hati</span>
@@ -160,8 +174,8 @@ if (isset($_SESSION['user_id'])) {
 
     <!-- Bottom Navigation Elegant Sage -->
     <nav class="bottom-nav d-lg-none shadow-lg">
-        <?php if ($_SESSION['role'] === 'admin'): ?>
-            <!-- Admin Management Bottom Nav -->
+        <?php if (is_management_role()): ?>
+            <!-- Admin & Structural Bottom Nav -->
             <a href="<?= $base_url ?>index.php" class="bottom-nav-item <?= ($active_page == 'dashboard') ? 'active' : '' ?>">
                 <i class="bi bi-grid-fill"></i>
                 <span class="fw-bold">Beranda</span>

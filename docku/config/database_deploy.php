@@ -3,9 +3,9 @@
 // Konfigurasi Database Docku (Pelaksana)
 
 $host = 'localhost';
-$db   = 'sidiksae_docku';
-$user = 'sidiksae_user'; // GANTI dengan prefix user jika perlu (misal: beni_sidiksae_user)
-$pass = 'Belajaran123';
+$db   = 'sidiksae_api';
+$user = 'root';
+$pass = 'Belajaran123!';
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";

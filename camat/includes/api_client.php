@@ -12,7 +12,10 @@ class ApiClient {
     private $token;
 
     public function __construct() {
-        $this->baseUrl = API_BASE_URL . '/' . API_VERSION;
+        // Fix: Handle empty API_VERSION correctly
+        $version = (defined('API_VERSION') && API_VERSION !== '') ? '/' . API_VERSION : '';
+        $this->baseUrl = API_BASE_URL . $version;
+        
         $this->apiKey = API_KEY;
         $this->clientId = CLIENT_ID;
         $this->clientSecret = CLIENT_SECRET;
@@ -150,25 +153,66 @@ class ApiClient {
     }
 
     /**
-     * Login ke API
+     * Login ke API (Delegated to Identity Service)
      */
     public function login($username, $password) {
-        $data = [
-            'client_id' => $this->clientId,
-            'client_secret' => $this->clientSecret,
-            'api_key' => $this->apiKey,
-            'api_secret' => $this->clientSecret,
-            'username' => $username,
-            'password' => $password
-        ];
-
-        $response = $this->post('/auth/login', $data);
-        
-        if ($response['success'] && isset($response['data']['token'])) {
-            $this->setToken($response['data']['token']);
+        // Identity Module requires /v1/ prefix for API endpoints
+        // Safety: Check if IDENTITY_URL is defined
+        if (!defined('IDENTITY_URL')) {
+            return [
+                'success' => false,
+                'message' => 'Identity Module URL not configured. Please contact administrator.',
+                'http_code' => 500
+            ];
         }
         
-        return $response;
+        $idUrl = IDENTITY_URL . '/v1/auth/login';
+        
+        $data = [
+            'username' => $username,
+            'password' => $password,
+            'device_type' => 'web_camat'
+        ];
+
+        // Custom call to Identity Service
+        $ch = curl_init($idUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'X-APP-ID: ' . $this->clientId,
+            'X-APP-KEY: ' . $this->apiKey
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $result = json_decode($response, true);
+        
+        if ($httpCode === 200 && isset($result['status']) && $result['status'] === 'success') {
+            // Store token for subsequent API calls to Gateway
+            $this->setToken($result['data']['access_token']);
+            
+            return [
+                'success' => true,
+                'data' => [
+                    'token' => $result['data']['access_token'],
+                    'user_id' => $result['data']['uuid_user'],
+                    'uuid_user' => $result['data']['uuid_user']
+                ],
+                'message' => 'Login success'
+            ];
+        }
+        
+        return [
+            'success' => false,
+            'http_code' => $httpCode,
+            'message' => $result['message'] ?? 'Login failed'
+        ];
     }
 
     /**

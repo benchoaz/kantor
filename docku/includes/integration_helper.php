@@ -101,14 +101,21 @@ function syncUsersToCamas($pdo, $forceSync = false) {
     $payload = json_encode(['users' => $users]);
 
     // 3. Send Request
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    $headers = [
         'Content-Type: application/json',
         'X-API-KEY: ' . $key,
         'Accept: application/json'
-    ]);
+    ];
+
+    // Add Bearer Token if available in session
+    if (isset($_SESSION['access_token'])) {
+        $headers[] = 'Authorization: Bearer ' . $_SESSION['access_token'];
+    }
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);

@@ -64,6 +64,16 @@ function has_role($roles) {
 }
 
 /**
+ * Cek apakah user memiliki role manajemen/struktural
+ * Digunakan untuk menampilkan menu Disposisi, Laporan, dsb.
+ */
+function is_management_role() {
+    if (!is_logged_in()) return false;
+    $management_roles = ['admin', 'kasi_pemerintahan', 'kasi_pem', 'sekcam', 'pimpinan'];
+    return in_array($_SESSION['role'], $management_roles);
+}
+
+/**
  * Require specific role
  */
 function require_role($roles) {

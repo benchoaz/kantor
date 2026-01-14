@@ -40,17 +40,18 @@ $user = current_user();
 
 // A. Map Penerima (Array of Objects)
 $penerima_list = [];
+$primary_role = '';
 if (is_array($diteruskan_kepada)) {
-    foreach ($diteruskan_kepada as $uid) {
+    foreach ($diteruskan_kepada as $slug) {
         $penerima_list[] = [
-            "user_id" => (int)$uid,
+            "user_id" => $slug, // Now a string (ROLE_SLUG)
             "tipe" => "TINDAK_LANJUT"
         ];
+        if (!$primary_role) $primary_role = $slug;
     }
 }
 
 // B. Map Instruksi (Array of Objects)
-// Mapping Rule: isi_disposisi (Camat) -> instruksi.isi (API)
 $instruksi_list = [];
 if (!empty($isi_disposisi)) {
     $instruksi_list[] = [
@@ -60,12 +61,19 @@ if (!empty($isi_disposisi)) {
 }
 
 $payload = [
-    "uuid_surat" => $id_surat, // Assuming id_surat is the UUID. If not, this needs upstream fix.
+    "uuid_surat" => $id_surat,
     "sifat"      => $sifat,
     "catatan"    => "Disposisi dari Camat",
     "deadline"   => $batas_waktu,
     "penerima"   => $penerima_list,
-    "instruksi"  => $instruksi_list
+    "instruksi"  => $instruksi_list,
+    "from" => [
+        "user_id" => $user['uuid_user'] ?? $user['id'],
+        "role" => $user['role'] ?? 'camat'
+    ],
+    "to" => [
+        "role" => $primary_role ?: 'STAF'
+    ]
 ];
 
 // 4. Send to API

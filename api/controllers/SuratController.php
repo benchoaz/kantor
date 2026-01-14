@@ -1,5 +1,19 @@
 <?php
-// /home/beni/projectku/kantor/api/controllers/SuratController.php
+/**
+ * SURAT CONTROLLER - STEP C1
+ * API as Master Event Store
+ * 
+ * ENDPOINTS:
+ * - POST /api/surat - Register surat (idempotent)
+ * - GET /api/pimpinan/surat-masuk - Read finalized surat
+ * 
+ * RULES:
+ * - UUID as primary reference
+ * - is_final = 1 wajib
+ * - scan_surat wajib (URL PDF)
+ * - Idempotent (duplicate UUID = success, not error)
+ * - source_app tracked
+ */
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../core/Response.php';
@@ -7,26 +21,22 @@ require_once __DIR__ . '/../core/Response.php';
 class SuratController {
     private $db;
     private $conn;
-
+    
     public function __construct() {
         $this->db = new Database();
         $this->conn = $this->db->getConnection();
     }
-
+    
+    /**
+     * Authenticate via API key
+     */
     private function authenticate() {
-        $apiKey = null;
-        if (function_exists('getallheaders')) {
-            $headers = getallheaders();
-            $apiKey = $headers['X-API-KEY'] ?? $headers['x-api-key'] ?? null;
-        }
-        if (!$apiKey) {
-            $apiKey = $_SERVER['HTTP_X_API_KEY'] ?? $_SERVER['http_x_api_key'] ?? null;
-        }
-
+        $apiKey = $_SERVER['HTTP_X_API_KEY'] ?? null;
+        
         if (!$apiKey) {
             Response::error("Unauthorized: Missing API Key", 401);
         }
-
+        
         $stmt = $this->conn->prepare("SELECT id FROM api_clients WHERE api_key = :token AND is_active = 1");
         $stmt->execute([':token' => $apiKey]);
         
@@ -34,121 +44,263 @@ class SuratController {
             Response::error("Unauthorized: Invalid API Key", 401);
         }
     }
-
-    // POST /api/surat
-    // Register File Metadata (Rule #2)
-    public function register() {
+    
+    /**
+     * POST /api/surat
+     * Register surat to master event store
+     * IDEMPOTENT: Same UUID = success (no error)
+     */
+    public function create() {
         $this->authenticate();
+        
         $data = json_decode(file_get_contents("php://input"), true);
-
-        // Strict Validation (User Rule #1 & #2)
-        // Expected Payload: uuid_surat, file_pdf, nomor_surat, ...
-        if (empty($data['uuid_surat']) || empty($data['file_pdf'])) {
-            Response::error("Validasi gagal", 400, [
-                'uuid_surat' => empty($data['uuid_surat']) ? "Wajib diisi" : null,
-                'file_pdf' => empty($data['file_pdf']) ? "Wajib diisi (URL PDF)" : null
-            ]);
+        
+        // VALIDATION
+        $errors = [];
+        
+        if (empty($data['uuid'])) {
+            $errors[] = 'uuid wajib diisi';
         }
-
-        // Validate PDF Extension (Rule #2)
-        // Check if file_pdf ends with .pdf (case insensitive)
-        if (substr(strtolower($data['file_pdf']), -4) !== '.pdf') {
-             Response::error("Validasi gagal", 400, ['file_pdf' => "Harus format .pdf"]);
+        
+        if (empty($data['nomor_surat'])) {
+            $errors[] = 'nomor_surat wajib diisi';
         }
-
+        
+        if (empty($data['scan_surat'])) {
+            $errors[] = 'scan_surat wajib diisi (regulatory requirement)';
+        }
+        
+        if (!isset($data['is_final']) || $data['is_final'] != 1) {
+            $errors[] = 'is_final harus 1 (surat harus final)';
+        }
+        
+        if (!empty($errors)) {
+            Response::error("Validasi gagal", 400, ['errors' => $errors]);
+        }
+        
         try {
-            // Idempotency: Use uuid_surat as key
-            $check = $this->conn->prepare("SELECT file_path FROM surat WHERE uuid = :uuid");
-            $check->execute([':uuid' => $data['uuid_surat']]);
+            // Check if UUID already exists (IDEMPOTENT)
+            $stmt = $this->conn->prepare("SELECT uuid, nomor_surat FROM surat WHERE uuid = :uuid");
+            $stmt->execute([':uuid' => $data['uuid']]);
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            if ($check->rowCount() > 0) {
-                // If exists, verify if it's the same file (Immutability check)
-                // We use file_path column to store the file_pdf URL
-                $existing = $check->fetch(PDO::FETCH_ASSOC);
-                
-                // Allow exact match (idempotent), but reject changes (immutable)
-                if ($existing['file_path'] !== $data['file_pdf']) {
-                     Response::error("Integrity Error: UUID sudah terdaftar dengan file berbeda. PDF tidak boleh diganti.", 409);
-                }
-                
-                // Idempotent SUCCESS
-                Response::json(['uuid_surat' => $data['uuid_surat']], "Surat sudah terdaftar.");
-                return;
+            if ($existing) {
+                // IDEMPOTENT: Already exists, return success
+                Response::success("Surat sudah terdaftar sebelumnya (idempotent)", [
+                    'uuid' => $existing['uuid'],
+                    'nomor_surat' => $existing['nomor_surat'],
+                    'note' => 'Duplicate UUID ignored as per idempotent design'
+                ]);
             }
-
-            // Insert New - Store metadata as JSON
-            $stmt = $this->conn->prepare("INSERT INTO surat (uuid, file_path, source_app, external_id, metadata, created_at, updated_at) 
-                                          VALUES (:uuid, :path, :source_app, :external_id, :metadata, NOW(), NOW())");
             
-            // Build metadata JSON
-            $metadata = [
-                'nomor_surat' => $data['nomor_surat'] ?? null,
-                'asal_surat' => $data['pengirim'] ?? null,
-                'tanggal_surat' => $data['tanggal_surat'] ?? null,
-                'perihal' => $data['perihal'] ?? null,
-                'file_hash' => $data['file_hash'] ?? null,
-                'file_size' => $data['file_size'] ?? null
-            ];
+            // BEGIN TRANSACTION
+            $this->conn->beginTransaction();
+            
+            // INSERT surat
+            $stmt = $this->conn->prepare("
+                INSERT INTO surat (
+                    uuid,
+                    nomor_surat,
+                    tanggal_surat,
+                    pengirim,
+                    perihal,
+                    scan_surat,
+                    is_final,
+                    source_app,
+                    status,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :uuid,
+                    :nomor_surat,
+                    :tanggal_surat,
+                    :pengirim,
+                    :perihal,
+                    :scan_surat,
+                    :is_final,
+                    :source_app,
+                    'FINAL',
+                    NOW(),
+                    NOW()
+                )
+            ");
             
             $stmt->execute([
-                ':uuid' => $data['uuid_surat'],
-                ':path' => $data['file_pdf'], 
-                ':source_app' => 'suratqu',
-                ':external_id' => null,
-                ':metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                ':uuid' => $data['uuid'],
+                ':nomor_surat' => $data['nomor_surat'],
+                ':tanggal_surat' => $data['tanggal_surat'] ?? null,
+                ':pengirim' => $data['pengirim'] ?? $data['asal_surat'] ?? null,
+                ':perihal' => $data['perihal'] ?? null,
+                ':scan_surat' => $data['scan_surat'],
+                ':is_final' => 1,
+                ':source_app' => $data['source_app'] ?? 'suratqu'
             ]);
-
-            Response::json(['uuid_surat' => $data['uuid_surat']], "Registrasi Berhasil");
-
-        } catch (Exception $e) {
-            Response::error("Database Error: " . $e->getMessage(), 500);
+            
+            // Log event
+            $stmtLog = $this->conn->prepare("
+                INSERT INTO event_log (
+                    event_type,
+                    entity_type,
+                    entity_uuid,
+                    actor_uuid,
+                    payload,
+                    created_at
+                ) VALUES (
+                    'CREATE_SURAT',
+                    'surat',
+                    :uuid,
+                    :actor,
+                    :payload,
+                    NOW()
+                )
+            ");
+            
+            $stmtLog->execute([
+                ':uuid' => $data['uuid'],
+                ':actor' => $data['created_by'] ?? 'system',
+                ':payload' => json_encode($data, JSON_UNESCAPED_UNICODE)
+            ]);
+            
+            // COMMIT
+            $this->conn->commit();
+            
+            Response::success("Surat berhasil didaftarkan ke master event store", [
+                'uuid' => $data['uuid'],
+                'nomor_surat' => $data['nomor_surat'],
+                'status' => 'FINAL',
+                'event_logged' => true
+            ], 201);
+            
+        } catch (PDOException $e) {
+            if ($this->conn->inTransaction()) {
+                $this->conn->rollBack();
+            }
+            
+            error_log("Surat Create Error: " . $e->getMessage());
+            Response::error("Database error", 500, ['message' => $e->getMessage()]);
         }
     }
     
-    // GET /api/surat
-    // List all surat (for testing/monitoring)
-    public function listAll() {
+    /**
+     * GET /api/pimpinan/surat-masuk
+     * Read finalized surat for pimpinan
+     * ONLY is_final = 1
+     */
+    public function listForPimpinan() {
         $this->authenticate();
         
         try {
-            $stmt = $this->conn->prepare("SELECT uuid, file_path, metadata, created_at FROM surat ORDER BY created_at DESC LIMIT 100");
-            $stmt->execute();
-            $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // Pagination
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+            $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
+            $offset = ($page - 1) * $limit;
             
-            // Decode metadata JSON for easier reading
-            foreach ($data as &$row) {
-                $row['metadata'] = json_decode($row['metadata'], true);
+            // Filter by source_app if specified
+            $sourceApp = $_GET['source_app'] ?? null;
+            
+            $query = "
+                SELECT 
+                    uuid,
+                    nomor_surat,
+                    tanggal_surat,
+                    pengirim as asal_surat,
+                    perihal,
+                    scan_surat,
+                    status,
+                    source_app,
+                    created_at
+                FROM surat
+                WHERE is_final = 1
+            ";
+            
+            if ($sourceApp) {
+                $query .= " AND source_app = :source_app";
             }
             
-            Response::json(['surat' => $data, 'count' => count($data)], "Data surat berhasil dimuat");
-        } catch (Exception $e) {
-            Response::error("Database Error: " . $e->getMessage(), 500);
+            $query .= " ORDER BY created_at DESC LIMIT :limit OFFSET :offset";
+            
+            $stmt = $this->conn->prepare($query);
+            
+            if ($sourceApp) {
+                $stmt->bindParam(':source_app', $sourceApp);
+            }
+            
+            $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Get total count
+            $countQuery = "SELECT COUNT(*) as total FROM surat WHERE is_final = 1";
+            if ($sourceApp) {
+                $countQuery .= " AND source_app = :source_app";
+            }
+            
+            $countStmt = $this->conn->prepare($countQuery);
+            if ($sourceApp) {
+                $countStmt->bindParam(':source_app', $sourceApp);
+            }
+            $countStmt->execute();
+            $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
+            
+            Response::success("Daftar surat masuk", [
+                'items' => $items,
+                'pagination' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => (int)$total,
+                    'pages' => ceil($total / $limit)
+                ]
+            ]);
+            
+        } catch (PDOException $e) {
+            error_log("List Surat Error: " . $e->getMessage());
+            // DEBUG MODE: Return actual error to client
+            Response::error("DB Error: " . $e->getMessage(), 500);
         }
     }
     
-    // GET /api/surat/{uuid}
-    // Retrieve File Metadata (For Camat/Docku Viewer)
-    public function getDetail($uuid) {
-        $this->authenticate(); // Or tighter scope?
+    /**
+     * GET /api/surat/{uuid}
+     * Get single surat by UUID
+     */
+    public function getByUuid($uuid) {
+        $this->authenticate();
         
-        $stmt = $this->conn->prepare("SELECT * FROM surat WHERE uuid = :uuid");
-        $stmt->execute([':uuid' => $uuid]);
-        $data = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$data) {
-            Response::error("Surat not found", 404);
+        try {
+            $stmt = $this->conn->prepare("
+                SELECT 
+                    uuid,
+                    nomor_surat,
+                    tanggal_surat,
+                    pengirim as asal_surat,
+                    perihal,
+                    scan_surat,
+                    status,
+                    is_final,
+                    source_app,
+                    created_at,
+                    updated_at
+                FROM surat
+                WHERE uuid = :uuid
+            ");
+            
+            $stmt->execute([':uuid' => $uuid]);
+            $surat = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$surat) {
+                Response::error("Surat tidak ditemukan", 404);
+            }
+            
+            Response::success("Detail surat", $surat);
+            
+        } catch (PDOException $e) {
+            error_log("Get Surat Error: " . $e->getMessage());
+            Response::error("DB Error: " . $e->getMessage(), 500);
         }
-
-        // Strict Response Structure Rule #3
-        $response_data = [
-            'uuid_surat' => $data['uuid'],
-            'nomor_surat' => $data['no_surat'],
-            'file_pdf' => $data['file_path'], // Stored as full URL now? Or relative? 
-                                              // If stored as full URL from Register, just return it.
-                                              // If stored relative, we must ensure consistency.
-            'status' => 'terdaftar' // Simple status for now
-        ];
-
-        Response::json($response_data, "Data Surat Ditemukan");
     }
 }
+
+// End of class
+

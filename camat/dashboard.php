@@ -18,9 +18,12 @@ $user = getCurrentUser();
 
 // Ambil data dashboard dari API
 $api = new ApiClient();
-$dashboardData = $api->get('/pimpinan/dashboard');
 
-// Default data jika API gagal
+// TEMPORARILY DISABLED: Dashboard endpoint not yet implemented
+// TODO: Create /pimpinan/dashboard endpoint in API
+// $dashboardData = $api->get('/pimpinan/dashboard');
+
+// Default data (fallback)
 $stats = [
     'surat_masuk_hari_ini' => 0,
     'disposisi_belum_dibaca' => 0,
@@ -30,11 +33,14 @@ $stats = [
 ];
 $errorMsg = null;
 
+// Uncomment when dashboard endpoint is ready
+/*
 if ($dashboardData['success'] && isset($dashboardData['data'])) {
     $stats = array_merge($stats, $dashboardData['data']);
 } elseif (!$dashboardData['success']) {
     $errorMsg = $dashboardData['message'] ?? 'Gagal mengambil data dashboard.';
 }
+*/
 
 include 'includes/header.php';
 ?>
